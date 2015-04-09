@@ -5,8 +5,16 @@ LOGIDR=logs.*
 LIBDIR=libs
 
 .PHONY: all clean test
-all :
-test :
+all : 
+
+# Define our wonderful make functions.
+include functions.mk
+
+# Include all sub directories in the following way
+# $(eval $(call define_program,worker,     \
+#         $(SRCDIR)/worker/main.cpp        \
+#         $(SRCDIR)/worker/work_engine.cpp \
+# ))
 
 SHELL := /bin/bash
 
