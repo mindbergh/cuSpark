@@ -23,6 +23,17 @@ CXXFLAGS+=-Wall -Wexgtra -O2
 CPPFLAGS+=-I$(CURDIR)/$(SRCDIR) $(foreach lib, $(LIBS), $(shell $PKGCONFIG) --cflags $(lib)))
 LDFLAGS+= $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --libs $(lib))) -Xlinker -rpath -Xlinker $(LIBDIR)
 
+$(LOGDIR):
+	mkdir -p $@
+
+local_server: $(OBJS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $@
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp Makefile
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -c -o $@
+
+clean:
+	rm -rf $(OBJDIR)
 
 test:
 
