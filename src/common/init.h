@@ -2,9 +2,9 @@
 #define CUSPARK_COMMON_INIT_H
 
 
-namespace impala {
+namespace cuspark {
 
-void InitCommonRuntime(int argc, char** argv);
+void InitCommon(int argc, char** argv);
 
 }
 #endif

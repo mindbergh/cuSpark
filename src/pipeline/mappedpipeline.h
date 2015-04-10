@@ -1,5 +1,9 @@
-#ifndef CUSPARK_SRC_PIPELINE_MAPPEDPIPELINE_H_
-#define CUSPARK_SRC_PIPELINE_MAPPEDPIPELINE_H_
+#ifndef CUSPARK_PIPELINE_MAPPEDPIPELINE_H_
+#define CUSPARK_PIPELINE_MAPPEDPIPELINE_H_
+
+
+#include "common/types.h"
+#include "pipeline/pipeline.h"
 
 namespace cuspark {
 
@@ -14,8 +18,8 @@ class MappedPipeLine : public PipeLine<T> {
       : parent_(parent),
         f_(f) {}
 
-    template <typename U>
-    MappedPipeLine<U> Map(MapFuncion<T, U> f);
+    template <typename W>
+    MappedPipeLine<T, W> Map(MapFunction<T, W> f);
 
     T Reduce(ReduceFunction<T> f);
 
@@ -24,7 +28,7 @@ class MappedPipeLine : public PipeLine<T> {
     }
 
     T *GetData() const {
-      return 
+      return; 
     }
 
     T GetElement(uint32_t index) {
@@ -34,9 +38,9 @@ class MappedPipeLine : public PipeLine<T> {
   private:
 
     MapFunction<U, T> f_;
-    PipeLine<U> parent_;
+    PipeLine<U> *parent_;
 
-}
+};
 
 
 }

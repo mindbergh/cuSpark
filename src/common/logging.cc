@@ -1,7 +1,6 @@
-#include "common/logging.h"
-
 #include <boost/thread/mutex.hpp>
 #include "common/logging.h"
+
 
 bool logging_initialized = false;
 

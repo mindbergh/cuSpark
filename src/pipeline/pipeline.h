@@ -1,8 +1,17 @@
-#ifndef CUSPARK_SRC_PIPELINE_PIPELINE_H_
-#define CUSPARK_SRC_PIPELINE_PIPELINE_H_
+#ifndef CUSPARK_PIPELINE_PIPELINE_H_
+#define CUSPARK_PIPELINE_PIPELINE_H_
+
+//#include "pipeline/mappedpipeline.h"
+
+#include <common/types.h>
 
 
 namespace cuspark {
+
+
+template <typename T, typename U>
+class MappedPipeLine;
+
 
 template <typename T>
 class PipeLine {
@@ -11,9 +20,8 @@ class PipeLine {
       : data_(data),
         size_(size) {}
     
-    
     template <typename U>
-    MappedPipeLine<U> map(MapFunction<T, U> f);
+    MappedPipeLine<T, U> map(MapFunction<T, U> f);
     
     T reduce(ReduceFunction<T> f);
   
@@ -38,7 +46,7 @@ class PipeLine {
 
 
 
-}
+};
 
 }
 
