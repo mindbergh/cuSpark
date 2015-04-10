@@ -9,7 +9,7 @@ namespace cuspark {
     uint32_t N = 100;
 
     int data[N];
-    int i;
+    uint32_t i;
 
     for (i = 0; i < N; ++i) {
       data[i] = i;
