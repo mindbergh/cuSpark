@@ -3,12 +3,15 @@ SRCDIR=src
 TESTDIR=test
 LOGIDR=logs.*
 LIBDIR=libs
+GTEST_DIR=$(LIBDIR)/gtest-1.7.0
+TESTS=pipeline_test
 
 .PHONY: all clean test
 all : 
 
 # Define our wonderful make functions.
 include functions.mk
+include 
 
 # Include all sub directories in the following way
 # $(eval $(call define_program,worker,     \
@@ -27,9 +30,8 @@ ifneq ($(strip $(LOBS_NOTFOUND)),)
 endif
 
 CXX=g++
-CXXFLAGS+=-Wall -Wexgtra -O2
-CPPFLAGS+=-I$(CURDIR)/$(SRCDIR) $(foreach lib, $(LIBS), $(shell $PKGCONFIG) --cflags $(lib)))
-LDFLAGS+= $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --libs $(lib))) -Xlinker -rpath -Xlinker $(LIBDIR)
+CXXFLAGS += -g -Wall -Wextra -O2
+CPPFLAGS += -isystem $(GTEST_DIR)/include -I$(CURDIR)/$(SRCDIR)/pipeline $(foreach lib,$(LIBS), $(shell $(PKGCONFIG) --cflags $(lib)))
 
 $(LOGDIR):
 	mkdir -p $@
@@ -40,10 +42,30 @@ local_server: $(OBJS)
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp Makefile
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -c -o $@
 
+GTEST_HEADERS=$(GTEST_DIR)/include/gtest/*.h# $(GTEST_DIR)/include/gtest/internal/*.h
+GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
+$(GTEST_DIR)/obj/gtest-all.o : $(GTEST_SRCS_)
+	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) $(CXXFLAGS) -c \
+         	$(GTEST_DIR)/src/gtest-all.cc -o $(GTEST_DIR)/obj/gtest-all.o
+
+$(GTEST_DIR)/obj/gtest_main.o : $(GTEST_SRCS_)
+	$(CXX) $(CPPFLAGS) -I$(GTEST_DIR) $(CXXFLAGS) -c \
+            	$(GTEST_DIR)/src/gtest_main.cc -o $(GTEST_DIR)/obj/gtest_main.o
+
+$(GTEST_DIR)/obj/gtest.a : $(GTEST_DIR)/obj/gtest-all.o
+	$(AR) $(ARFLAGS) $@ $^
+
+$(GTEST_DIR)/obj/gtest_main.a : $(GTEST_DIR)/obj/gtest-all.o $(GTEST_DIR)/obj/gtest_main.o
+	$(AR) $(ARFLAGS) $@ $^
+
+$(GTEST_DIR)/obj/pipeline_test.o: $(TESTDIR)/pipeline_test.cc
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(TESTDIR)/pipeline_test.cc
+	
+pipeline_test: $(GTEST_DIR)/obj/gtest_main.a $(GTEST_DIR)/obj/pipeline_test.o
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@
+
 clean:
 	rm -rf $(OBJDIR)
 
-test:
-
-
-
+test: $(TESTS)
+	echo $(TESTS)
