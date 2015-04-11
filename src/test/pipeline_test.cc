@@ -27,13 +27,13 @@ TEST_F(PipeLineTest, Basic) {
 
   PipeLine<int> pl(data, N);
 
-  //EXPECT_EQ(N, pl.GetDataSize());
+  EXPECT_EQ(N, pl.GetDataSize());
   //EXPECT_EQ(data, pl.GetData);
 
 
 
   for (i = 0; i < N; ++i) {
-    //EXPECT_EQ(pl.GetElement(i), data[i]);
+    EXPECT_EQ(pl.GetElement(i), data[i]);
   }
 }
 

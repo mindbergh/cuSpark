@@ -1,4 +1,4 @@
-LIBS=libs
+LIB=libs
 SRC=src
 OBJ=obj
 
@@ -9,11 +9,11 @@ OBJ_DIR 	:= $(addprefix $(OBJ)/,$(MODULES))
 
 SRCS			:= $(foreach sdir,$(SRC_DIR),$(wildcard $(sdir)/*.cc))
 OBJS			:= $(patsubst $(SRC)/%.cc,$(OBJ)/%.o,$(SRCS))
-INCLUDES	+= -I./ -I$(LIBS)/include -I$(SRC)
+INCLUDES	+= -I./ -I$(LIB)/include -I$(SRC)
 
 CXX = g++
-CXXFLAGS = -g -std=c++0x -L$(LIBS) -lgtest -lglog -lgflags -lpthread
-
+CXXFLAGS = -g -std=c++0x -O2 -L$(LIB) 
+LDFLAGS = -lpthread -Xlinker -rpath -Xlinker $(LIB) -L$(LIB) -lgtest -lglog
 vpath %.cc $(SRC_DIR)
 
 define make-goal
@@ -27,7 +27,7 @@ all: checkdirs testall
 
 
 testall: $(OBJS)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -o testall $(SRC)/testall/testall.cc $(OBJS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) -o testall $(SRC)/testall/testall.cc $(OBJS)
 
 print-%  : ; @echo $* = $($*)
 
