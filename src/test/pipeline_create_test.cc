@@ -4,7 +4,7 @@
 
 using namespace cuspark;
 
-class PipeLineTest : public ::testing::Test {
+class PipeLineCreateTest : public ::testing::Test {
   protected:
     virtual void SetUp() {
     }
@@ -14,7 +14,7 @@ class PipeLineTest : public ::testing::Test {
 };
 
 
-TEST_F(PipeLineTest, Basic) {
+TEST_F(PipeLineCreateTest, Basic) {
   uint32_t N = 100;
 
   int data[N];
@@ -24,13 +24,9 @@ TEST_F(PipeLineTest, Basic) {
     data[i] = i;
   }
 
-
   PipeLine<int> pl(data, N);
 
   EXPECT_EQ(N, pl.GetDataSize());
-  //EXPECT_EQ(data, pl.GetData);
-
-
 
   for (i = 0; i < N; ++i) {
     EXPECT_EQ(pl.GetElement(i), data[i]);

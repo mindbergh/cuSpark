@@ -14,9 +14,10 @@ namespace cuspark {
 template <typename T, typename U>
 class MappedPipeLine : public PipeLine<T> {
   public:
-    MappedPipeLine(PipeLine<U> *parent, MapFunction<U, T> f)
-      : parent_(parent),
-        f_(f) {}
+    MappedPipeLine(PipeLine<U> *parent, MapFunction<U, T> f, T* data)
+        : PipeLine<T>(data, parent->GetDataSize()),
+	  parent_(parent),
+	  f_(f) {}
 
     template <typename W>
     MappedPipeLine<T, W> Map(MapFunction<T, W> f);

@@ -4,15 +4,13 @@
 #include <boost/function.hpp>
 #include <boost/function_equal.hpp>
 
-
-
 namespace cuspark {
   
   template <typename T, typename U>
-  using MapFunction = boost::function<U (const T& x)>;
+  using MapFunction = std::function<U(T)>;
 
   template <typename T>
-  using ReduceFunction = boost::function<T (const T& a, const T& b)>;
+  using ReduceFunction = std::function<T (const T& a, const T& b)>;
 
 
 }

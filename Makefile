@@ -2,7 +2,6 @@ LIB=libs
 SRC=src
 OBJ=obj
 
-
 MODULES		:= pipeline common test
 SRC_DIR   := $(addprefix $(SRC)/,$(MODULES))
 OBJ_DIR 	:= $(addprefix $(OBJ)/,$(MODULES))
@@ -25,7 +24,6 @@ endef
 
 all: checkdirs testall
 
-
 testall: $(OBJS)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(INCLUDES) -o testall $(SRC)/testall/testall.cc $(OBJS)
 
@@ -37,10 +35,6 @@ $(OBJ_DIR):
 	@mkdir -p $@
 
 clean:
-	rm -r obj
+	rm -r obj testall
 
 $(foreach odir,$(OBJ_DIR),$(eval $(call make-goal,$(odir))))
-
-
-
-
