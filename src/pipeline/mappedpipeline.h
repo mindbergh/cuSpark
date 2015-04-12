@@ -1,7 +1,6 @@
 #ifndef CUSPARK_PIPELINE_MAPPEDPIPELINE_H_
 #define CUSPARK_PIPELINE_MAPPEDPIPELINE_H_
 
-
 #include "common/types.h"
 #include "pipeline/pipeline.h"
 
@@ -14,8 +13,8 @@ namespace cuspark {
 template <typename T, typename U>
 class MappedPipeLine : public PipeLine<T> {
   public:
-    MappedPipeLine(PipeLine<U> *parent, MapFunction<U, T> f, T* data)
-        : PipeLine<T>(data, parent->GetDataSize()),
+    MappedPipeLine(PipeLine<U> *parent, MapFunction<U, T> f)
+        : PipeLine<T>(NULL, parent->GetDataSize()),
 	  parent_(parent),
 	  f_(f) {}
 
@@ -23,30 +22,29 @@ class MappedPipeLine : public PipeLine<T> {
     MappedPipeLine<T, W> Map(MapFunction<T, W> f);
 
     T Reduce(ReduceFunction<T> f);
-
-    uint32_t GetDataSize() const {
-      return parent_->GetDataSize();
-    }
-
+    
     T *GetData() const {
+      execute();
       return; 
     }
 
     T GetElement(uint32_t index) {
-      return f_(parent_->GetElement(index));
+      execute();
+      PipeLine<T>::GetElement(index);
+      //return f_(parent_->GetElement(index));
     }
 
   private:
 
+    void execute();
     MapFunction<U, T> f_;
     PipeLine<U> *parent_;
 
 };
 
-
 }
-
-
+#ifdef INNERFLAG
+#include "pipeline/mappedpipeline.cc"
+#endif
 
 #endif //CUSPARK_SRC_PIPELINE_MAPPEDPIPELINE_H_
-

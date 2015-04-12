@@ -2,8 +2,6 @@
 #define CUSPARK_PIPELINE_PIPELINE_H_
 
 #include <common/types.h>
-#include <boost/function.hpp>
-#include <boost/function_equal.hpp>
 
 namespace cuspark {
 
@@ -19,8 +17,7 @@ class PipeLine {
    
     template <typename U>
     MappedPipeLine<T, U> Map(MapFunction<T, U> f){
-      T* data = (T*) malloc (sizeof(T) * size_);
-      MappedPipeLine<T, U> a(this, f, data);
+      MappedPipeLine<T, U> a(this, f);
       return a;
     }
     

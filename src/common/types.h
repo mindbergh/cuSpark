@@ -7,10 +7,10 @@
 namespace cuspark {
   
   template <typename T, typename U>
-  using MapFunction = std::function<U(T)>;
+  using MapFunction = boost::function<U(T)>;
 
   template <typename T>
-  using ReduceFunction = std::function<T (const T& a, const T& b)>;
+  using ReduceFunction = boost::function<T (const T& a, const T& b)>;
 
 
 }
