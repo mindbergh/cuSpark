@@ -15,7 +15,7 @@ class PipeLineCreateTest : public ::testing::Test {
 
 
 TEST_F(PipeLineCreateTest, Basic) {
-  uint32_t N = 100;
+  uint32_t N = 5;
 
   int data[N];
   uint32_t i;
@@ -28,8 +28,14 @@ TEST_F(PipeLineCreateTest, Basic) {
 
   EXPECT_EQ(N, pl.GetDataSize());
 
+  int* out = pl.GetData();
+  for (i = 0; i < N; ++i) {
+    EXPECT_EQ(out[i], data[i]);
+  }
+
   for (i = 0; i < N; ++i) {
     EXPECT_EQ(pl.GetElement(i), data[i]);
   }
+
 }
 

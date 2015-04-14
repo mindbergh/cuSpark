@@ -15,20 +15,19 @@ class PipeLineMapTest : public ::testing::Test {
     }
 };
 
-int do_exponential(int a){
-  std::cout << "*";
-  return a*a;
-}
-MapFunction<int, int> exponential = do_exponential;
 /*
 struct do_exponential{
-  int operator()(int a) { return a * a; };
+  __device__ int operator()(int a){
+    return a*a;
+  }
 };
 MapFunction<int, int> exponential = do_exponential();
 */
+__host__ __device__ int do_exponential(int i){ return 4* i; }
+MapFunction<int, int, int(*)(int)> exponential{ do_exponential };
 
 TEST_F(PipeLineMapTest, Basic) {
-  uint32_t N = 100;
+  uint32_t N = 5;
 
   int data[N];
   uint32_t i;
@@ -38,12 +37,15 @@ TEST_F(PipeLineMapTest, Basic) {
   }
 
   PipeLine<int> pl(data, N);
+  
   MappedPipeLine<int, int> mpl = pl.Map(exponential);
 
   EXPECT_EQ(N, mpl.GetDataSize());
 
+  int* out = mpl.GetData();
   for (i = 0; i < N; ++i) {
-    EXPECT_EQ(mpl.GetElement(i), data[i] * data[i]);
+    EXPECT_EQ(out[i], 4 * data[i]);
   }
+  
 }
 

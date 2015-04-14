@@ -2,7 +2,7 @@ LIB=libs
 SRC=src
 OBJ=obj
 
-MODULES		:= pipeline common test
+MODULES		:= pipeline common test cuda
 INNERMODULES		:= $(OBJ)/pipeline
 SRC_DIR   	:= $(addprefix $(SRC)/,$(MODULES))
 OBJ_DIR 	:= $(addprefix $(OBJ)/,$(MODULES))

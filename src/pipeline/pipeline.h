@@ -11,37 +11,35 @@ class MappedPipeLine;
 template <typename T>
 class PipeLine {
   public:
-    PipeLine(T *data, uint32_t size)
-      : data_(data),
-        size_(size) {}
+    PipeLine(T *data, uint32_t size);
    
     template <typename U>
-    MappedPipeLine<T, U> Map(MapFunction<T, U> f){
+    MappedPipeLine<T, U> Map(MapFunction<T, U, U(*)(T)> f){
       MappedPipeLine<T, U> a(this, f);
       return a;
     }
     
     T Reduce(ReduceFunction<T> f);
   
-    uint32_t GetDataSize() const{
+    uint32_t GetDataSize(){
 	return size_;
     }
     
-    T *GetData() const {
-      return data_;
-    }
+    T *GetData();
 
-    T GetElement(uint32_t index) {
-      return data_[index];
-    }
+    T GetElement(uint32_t index);
 
-  private:
+    void Execute();
 
     uint32_t size_; //the length of the data array
-    T *data_; //pointer to the array
+    T* data_; //pointer to the array
 
 };
 
 }
+
+#ifdef INNERFLAG
+#include "pipeline/pipeline.cu"
+#endif
 
 #endif // CUSPARK_SRC_PIPELINE_PIPELINE_H_
