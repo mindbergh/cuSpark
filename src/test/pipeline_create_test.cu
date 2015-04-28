@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "pipeline/pipeline.h"
-#include "pipeline/mappedpipeline.h"
 
 using namespace cuspark;
 
@@ -33,9 +32,10 @@ TEST_F(PipeLineCreateTest, Basic) {
     EXPECT_EQ(out[i], data[i]);
   }
 
+  /*
   for (i = 0; i < N; ++i) {
     EXPECT_EQ(pl.GetElement(i), data[i]);
   }
-
+  */
 }
 
