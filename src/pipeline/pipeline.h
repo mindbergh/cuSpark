@@ -12,110 +12,113 @@
 
 namespace cuspark {
 
-template <typename T, typename U>
-class MappedPipeLine;
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    class MappedPipeLine;
 
-/*
- * Basic PipeLine class, which we generate from file or array
- * 
- */
-template <typename T>
-class PipeLine {
-  public:
-    PipeLine(T *data, uint32_t size):size_(size){
-      DLOG(INFO) << "initiating pipeline from array";
-      MallocCudaData();
-      cudaMemcpy(data_, data, size_ * sizeof(T), cudaMemcpyHostToDevice);
-    }
+  /*
+   * Basic PipeLine class, which we generate from file or array
+   * 
+   */
+  template <typename BaseType>
+    class PipeLine {
+      public:
+        PipeLine(BaseType *data, uint32_t size):size_(size){
+          DLOG(INFO) << "initiating pipeline from array";
+          MallocCudaData();
+          cudaMemcpy(data_, data, size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
+        }
 
-    PipeLine(std::string filename, uint32_t size, StringMapFunction<T> f):size_(size){
-      DLOG(INFO) << "initiating pipeline from file: "<<size_;
-      MallocCudaData();
-      T* cache = new T[size_];
+        PipeLine(std::string filename, uint32_t size, StringMapFunction<BaseType> f):size_(size){
+          DLOG(INFO) << "initiating pipeline from file: "<<size_;
+          MallocCudaData();
+          BaseType* cache = new BaseType[size_];
 
-      std::ifstream infile;
-      infile.open(filename);
-      std::string line;
-      int line_number = 0;
-      while(std::getline(infile, line)){
-        cache[line_number++] = f(line);
-      }
-      cudaMemcpy(data_, cache, size_ * sizeof(T), cudaMemcpyHostToDevice);
-      free(cache);
-    }
+          std::ifstream infile;
+          infile.open(filename);
+          std::string line;
+          int line_number = 0;
+          while(std::getline(infile, line)){
+            cache[line_number++] = f(line);
+          }
+          cudaMemcpy(data_, cache, 
+                     size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
+          free(cache);
+        }
 
-    PipeLine(uint32_t size):size_(size){}
-   
-    template <typename U>
-    MappedPipeLine<U, T> Map(MapFunction<U, T> f){
-      MappedPipeLine<U, T> a(this, f);
-      return a;
-    }
-    
-    T Reduce(ReduceFunction<T> f){
-      DLOG(INFO) << "Executing Reduce";
-      thrust::device_ptr<T> self_data(data_);
-      T init = GetElement_(0);
-      T result = thrust::reduce(self_data + 1, self_data + size_, init, f);
-      FreeCudaData();
-      return result;
-    }
-  
-    uint32_t GetDataSize(){
-	return size_;
-    }
-    
-    T *GetData(){
-      Execute();
-      return GetData_();
-    }
- 
-    T *GetData_(){
-      DLOG(INFO) << "Getting data from address: " << data_;
-      T* data = (T*)malloc(size_ * sizeof(T));
-      cudaMemcpy(data, this->data_, size_ * sizeof(T), cudaMemcpyDeviceToHost);
-      return data;
-    }
+        PipeLine(uint32_t size):size_(size){}
 
-    T GetElement(uint32_t index){
-      Execute();
-      return GetElement_(index);
-    }
+        template <typename AfterType, typename UnaryOp>
+          MappedPipeLine<AfterType, BaseType, UnaryOp> Map(UnaryOp f) {
+            MappedPipeLine<AfterType, BaseType, UnaryOp> a(this, f);
+            return a;
+          }
 
-    T GetElement_(uint32_t index){
-      T element;
-      cudaMemcpy(&element, this->data_ + index, sizeof(T), cudaMemcpyDeviceToHost);
-      return element;
-    }
+        template <typename BinaryOp>
+          BaseType Reduce(BinaryOp f){
+            DLOG(INFO) << "Executing Reduce";
+            thrust::device_ptr<BaseType> self_data(data_);
+            BaseType init = GetElement_(0);
+            BaseType result = thrust::reduce(self_data + 1, 
+                                             self_data + size_, init, f);
+            FreeCudaData();
+            return result;
+          }
 
-    void Cache(){
-      cached = true;
-    }
+        uint32_t GetDataSize(){
+          return size_;
+        }
 
-  //protected:
+        BaseType *GetData(){
+          Execute();
+          return GetData_();
+        }
 
-    T* data_; //pointer to the array
-    bool cached = false;
-    uint32_t size_; //the length of the data array
+        BaseType *GetData_(){
+          DLOG(INFO) << "Getting data from address: " << data_;
+          BaseType* data = (BaseType*)malloc(size_ * sizeof(BaseType));
+          cudaMemcpy(data, this->data_, size_ * sizeof(BaseType), cudaMemcpyDeviceToHost);
+          return data;
+        }
 
-    void MallocCudaData(){
-      DLOG(INFO) << "malloc GPU memory for data with size :" << sizeof(T) << " * " << size_;
-      cudaMalloc((void**)&data_, size_ * sizeof(T));
-    }
- 
-    void FreeCudaData(){
-      if(!cached){
-        DLOG(INFO) << "freeing GPU memory for data with size :" << sizeof(T) << " * " << size_;
-	cudaFree(data_);
-        data_ = NULL;
-      }
-    }
+        BaseType GetElement(uint32_t index){
+          Execute();
+          return GetElement_(index);
+        }
 
-    void Execute(){
-      DLOG(INFO) << "Executing PipeLine";
-    }
+        BaseType GetElement_(uint32_t index){
+          BaseType element;
+          cudaMemcpy(&element, this->data_ + index, sizeof(BaseType), cudaMemcpyDeviceToHost);
+          return element;
+        }
 
-};
+        void Cache(){
+          cached = true;
+        }
+
+        //protected:
+
+        BaseType* data_; //pointer to the array, raw ptr in CUDA
+        bool cached = false;
+        uint32_t size_; //the length of the data array
+
+        void MallocCudaData(){
+          DLOG(INFO) << "malloc GPU memory for data with size :" << sizeof(BaseType) << " * " << size_;
+          cudaMalloc((void**)&data_, size_ * sizeof(BaseType));
+        }
+
+        void FreeCudaData(){
+          if(!cached){
+            DLOG(INFO) << "freeing GPU memory for data with size :" << sizeof(BaseType) << " * " << size_;
+            cudaFree(data_);
+            data_ = NULL;
+          }
+        }
+
+        void Execute(){
+          DLOG(INFO) << "Executing PipeLine";
+        }
+
+    };
 
 }
 
