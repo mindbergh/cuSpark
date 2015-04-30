@@ -2,7 +2,7 @@
 #define CUSPARK_COMMON_LOGGING_H
 
 #include <glog/logging.h>
-
+#include <gflags/gflags.h>
 
 namespace cuspark {
 

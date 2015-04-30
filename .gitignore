@@ -1,3 +1,4 @@
 obj
 testall
 src/**/*.back
+log/
