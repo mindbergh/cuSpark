@@ -9,6 +9,7 @@
 #include "cuda/cuda-basics.h"
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
+#include "common/CycleTimer.h"
 
 namespace cuspark {
 
@@ -22,10 +23,9 @@ namespace cuspark {
   template <typename BaseType>
     class PipeLine {
       public:
-        PipeLine(std::string path, uint32_t size);
         PipeLine(BaseType *data, uint32_t size);
         PipeLine(std::string filename, 
-            uint32_t size, StringMapFunction<BaseType> f);
+            uint32_t size, StringMapFunction f);
         PipeLine(uint32_t size);
 
         template <typename AfterType, typename UnaryOp>
@@ -55,17 +55,8 @@ namespace cuspark {
         BaseType* data_; //pointer to the array, raw ptr in CUDA
         bool cached = false;
         uint32_t size_; //the length of the data array
-
+        
    };
-  
-
-  // size can be larger than cuda global mem
-  template <typename BaseType>
-    PipeLine<BaseType>::PipeLine(std::string path, uint32_t size)
-    : size_(size) {
-      DLOG(INFO) << "Initialing pipeline from textfile lazily" << std::endl;
-      
-    }
 
   template <typename BaseType>
     PipeLine<BaseType>::PipeLine(BaseType *data, uint32_t size) 
@@ -78,22 +69,24 @@ namespace cuspark {
   template <typename BaseType>
     PipeLine<BaseType>::PipeLine(std::string filename, 
         uint32_t size, 
-        StringMapFunction<BaseType> f)
+        StringMapFunction f)
     : size_(size) {
       DLOG(INFO) << "initiating pipeline from file: " << size_ << std::endl;
+      double start = CycleTimer::currentSeconds();
       MallocCudaData();
-      BaseType* cache = new BaseType[size_];
+      BaseType cache[size_];
 
       std::ifstream infile;
       infile.open(filename);
       std::string line;
       int line_number = 0;
-      while(std::getline(infile, line)){
+      while (std::getline(infile, line)) {
         cache[line_number++] = f(line);
       }
       cudaMemcpy(data_, cache, 
           size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
-      free(cache);
+      double end = CycleTimer::currentSeconds();
+      DLOG(INFO) << "Initial time took:" << (end - start) * 1000.f << "ms";
     }
 
   template <typename BaseType>
@@ -110,7 +103,7 @@ namespace cuspark {
   template <typename BaseType>
   template <typename BinaryOp>
     BaseType PipeLine<BaseType>::Reduce(BinaryOp f){
-      DLOG(INFO) << "Executing Reduce";
+      DLOG(INFO) << "Executing Reduce\n";
       thrust::device_ptr<BaseType> self_data(data_);
       BaseType init = GetElement_(0);
       BaseType result = thrust::reduce(self_data + 1, 
@@ -174,9 +167,6 @@ namespace cuspark {
     void PipeLine<BaseType>::Execute(){
       DLOG(INFO) << "Executing PipeLine";
     }
-
-
-
 
 
 }

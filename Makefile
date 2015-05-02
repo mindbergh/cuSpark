@@ -21,14 +21,14 @@ vpath %.cu $(SRC_DIR)
 
 ifeq ($(ARCH), Darwin)
 # Building on mac
-LDFLAGS+=-L/usr/local/cuda/lib/ -lcudart -arch=sm_21
+LDFLAGS+=-L/usr/local/cuda/lib/ -lcudart
 else
 # Building on Linux
-LDFLAGS+=-L/usr/local/cuda/lib64/ -lcudart -arch=sm_21
+LDFLAGS+=-L/usr/local/cuda/lib64/ -lcudart
 endif
 
-NVCC = nvcc -m64
-NVCCFLAGS = -g -std=c++11 -O3 -L$(LIB) -rdc=true
+NVCC = nvcc -m64 -arch=sm_21
+NVCCFLAGS = -g -std=c++11 -O3 -L$(LIB) -rdc=true 
 
 define make-goal
 ifneq ($(filter $1, $(INNERMODULES)),)

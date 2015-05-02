@@ -13,15 +13,15 @@ namespace cuspark {
     double y;
   };
 
-  template<typename T>
-    struct StringMapFunction {
-      point operator()(std::string arg) {
-        std::stringstream iss(arg);
-        point p;
-        iss >> p.x.x  >> p.x.y  >> p.x.z >> p.x.w >> p.y;
-        return p;
-      }
-    };
+  struct StringMapFunction {
+    point operator()(std::string arg) {
+      std::stringstream iss(arg);
+      point p;
+      iss >> p.x.x  >> p.x.y  >> p.x.z >> p.x.w >> p.y;
+      return p;
+    }
+  };
+
 }
 
 
