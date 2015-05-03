@@ -52,6 +52,7 @@ struct reducefunctor {
 };
 
 TEST_F(PipeLineReduceTest, Basic) {
+  DLOG(INFO) << "******************Running Reduce Test******************";
   std::string path = "./data/testInts.txt";
   uint32_t size = 10;
   Context context;

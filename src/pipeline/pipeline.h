@@ -76,14 +76,16 @@ namespace cuspark {
     f_(f),
     filename_(filename),
     context_(context),
-    memLevel(None) {}
+    memLevel(None) {
+      DLOG(INFO) << "Construct PipeLine from file: " << size << " * " << sizeof(BaseType);
+    }
 
   template <typename BaseType>
     PipeLine<BaseType>::PipeLine(uint32_t size, Context *context)
     : size_(size),
     context_(context),
     memLevel(None) {
-      DLOG(INFO) << "Construct PipeLine by size and context: " << size;
+      DLOG(INFO) << "Construct PipeLine by size and context: " << size << " * " << sizeof(BaseType);
     }
 
   template <typename BaseType>
@@ -148,6 +150,7 @@ namespace cuspark {
 
   template <typename BaseType>
     void PipeLine<BaseType>::ReadFile_(BaseType* mem_data){
+      DLOG(INFO) << "Reading File: " << filename_;
       std::ifstream infile;
       infile.open(filename_);
       std::string line;
@@ -197,7 +200,6 @@ namespace cuspark {
 
   template <typename BaseType>
     uint32_t PipeLine<BaseType>::GetDataSize(){
-      DLOG(INFO) << "Get Datasize";
       return this->size_;
     }
   template <typename BaseType>

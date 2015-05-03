@@ -56,6 +56,7 @@ void loadToHost(std::string path, uint32_t size, T* t, Func f) {
 }
 
 TEST_F(PipeLineCreateTest, Basic) {
+  DLOG(INFO) << "******************Running Create Test******************";
   std::string path = "./data/lrdatasmall.txt";
   uint32_t size = 32928;
   Context context;

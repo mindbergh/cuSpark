@@ -49,6 +49,7 @@ class PipeLineLogisticRegressionTest : public ::testing::Test {
 };
 
 TEST_F(PipeLineLogisticRegressionTest, Basic) {
+  DLOG(INFO) << "******************Running Logistic Regression Test******************";
   float eta = 0.01;
   Context context;
   InputMapOp func = [] (const std::string& line) -> point {
@@ -61,10 +62,11 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     return p;
   };
   //PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 80, func);
-  pl.Materialize(Host);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000, func);
+  //pl.Materialize(Host);
 
   double18 w;
+  
   for (int i = 0; i < 100; i++){
 
     MappedPipeLine<double18, point, mapfunctor> mpl = pl.Map<double18>(mapfunctor(w));
