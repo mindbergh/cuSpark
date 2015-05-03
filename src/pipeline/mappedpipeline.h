@@ -2,12 +2,9 @@
 #define CUSPARK_PIPELINE_MAPPEDPIPELINE_H_
 
 #include <stdio.h>
-#include "common/function.h"
 #include "common/logging.h"
 #include "common/util.h"
-#include "cuda/cuda-basics.h"
 #include "pipeline/pipeline.h"
-#include "pipeline/textpipeline.h"
 
 #include <thrust/device_vector.h>
 #include <thrust/transform.h>
@@ -19,16 +16,16 @@ namespace cuspark {
    * Mapped from type BaseType to type AfterType
    */
   template <typename AfterType, typename BaseType, typename UnaryOp>
-    class MappedPipeLine : public TextPipeLine<AfterType> {
+    class MappedPipeLine : public PipeLine<AfterType> {
 
       public:
-        MappedPipeLine(TextPipeLine<BaseType> *parent, UnaryOp f);
+        MappedPipeLine(PipeLine<BaseType> *parent, UnaryOp f);
 
         //template <typename W>
         //MappedPipeLine<W, AfterType> Map(unaryOp f);
 
         template <typename BinaryOp>
-          AfterType Reduce(BinaryOp f, AfterType identity);
+          AfterType Reduce(BinaryOp f);
 
         AfterType *GetData();
 
@@ -41,16 +38,16 @@ namespace cuspark {
         void Materialize(MemLevel ml);
 
         UnaryOp f_;
-        TextPipeLine<BaseType> *parent_;
+        PipeLine<BaseType> *parent_;
       
       private:
-        typedef TextPipeLine<AfterType> inherited;
+        typedef PipeLine<AfterType> inherited;
     };
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
     MappedPipeLine<AfterType, BaseType, UnaryOp>::
-    MappedPipeLine(TextPipeLine<BaseType> *parent, UnaryOp f)
-    : TextPipeLine<AfterType>(parent->GetDataSize(), parent->GetContext()),
+    MappedPipeLine(PipeLine<BaseType> *parent, UnaryOp f)
+    : PipeLine<AfterType>(parent->GetDataSize(), parent->GetContext()),
     parent_(parent),
     f_(f) {}
 
@@ -58,18 +55,19 @@ namespace cuspark {
   template <typename AfterType, typename BaseType, typename UnaryOp>
     template <typename BinaryOp>
     AfterType
-    MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce(BinaryOp f, AfterType identity) {
+    MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce(BinaryOp f) {
       DLOG(INFO) << "Mapped Reduce from " << mlString(this->memLevel);
       DLOG(INFO) << "data_ addr: " << inherited::data_;
       switch (this->memLevel) {
         case Host:
         case Cuda:
-          return TextPipeLine<AfterType>::Reduce(f, identity);
+          return PipeLine<AfterType>::Reduce(f);
         case None:
           this->Materialize(Host);
-          return TextPipeLine<AfterType>::Reduce(f, identity);
+          return PipeLine<AfterType>::Reduce(f);
         default:
-          return identity;
+          DLOG(FATAL) << "memLevel type not correct";
+          exit(1);
       }
     }
 
@@ -82,13 +80,13 @@ namespace cuspark {
   template <typename AfterType, typename BaseType, typename UnaryOp>
     Context *
     MappedPipeLine<AfterType, BaseType, UnaryOp>::GetContext() {
-      return TextPipeLine<AfterType>::GetContext();
+      return PipeLine<AfterType>::GetContext();
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
     uint32_t
     MappedPipeLine<AfterType, BaseType, UnaryOp>::GetDataSize() {
-      return TextPipeLine<AfterType>::GetDataSize();
+      return PipeLine<AfterType>::GetDataSize();
     }
 
 

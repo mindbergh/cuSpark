@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "pipeline/mappedpipeline.h"
-#include "pipeline/textpipeline.h"
+#include "pipeline/pipeline.h"
 #include "common/logging.h"
 #include "common/context.h"
 #include <boost/lexical_cast.hpp>
@@ -11,7 +11,7 @@ using namespace cuspark;
 typedef int (*InputMapOp)(const std::string&);
 
 
-class TextPipeLineMapTest : public ::testing::Test {
+class PipeLineReduceTest : public ::testing::Test {
   protected:
     virtual void SetUp() {
     }
@@ -19,7 +19,6 @@ class TextPipeLineMapTest : public ::testing::Test {
     virtual void TearDown() {
     }
 };
-
 
 template <typename T, typename Func>
 void loadToHost(std::string path, uint32_t size, T* t, Func f) {
@@ -40,19 +39,19 @@ struct mapfunctor {
   const int factor;
   mapfunctor(int factor) : factor(factor) {}
   __host__ __device__
-    int operator()(int a) {
-      return a * factor;
-    }
+  int operator()(int a) {
+    return a * factor;
+  }
 };
 
 struct reducefunctor {
   __host__ __device__
-    int operator() (int a, int b) {
-      return a + b;
-    }
+  int operator() (int a, int b) {
+    return a + b;
+  }
 };
 
-TEST_F(TextPipeLineMapTest, Basic) {
+TEST_F(PipeLineReduceTest, Basic) {
   std::string path = "./data/testInts.txt";
   uint32_t size = 10;
   Context context;
@@ -60,31 +59,16 @@ TEST_F(TextPipeLineMapTest, Basic) {
     int res = boost::lexical_cast<int>(line);
     return res;
   };
-  TextPipeLine<int> * tpl = context.textFile<int>(path, size, func);
-
-  tpl->Materialize(Host);
-
-  int factor = 2;
-
-  MappedPipeLine<int, int, mapfunctor> mpl = tpl->Map<int>(mapfunctor(factor));
-
-
+  PipeLine<int> pl = context.textFile<int>(path, size, func);
+  
+  pl.Materialize(Host);
+ 
+  int factor = 3;
+  MappedPipeLine<int, int, mapfunctor> mpl = pl.Map<int>(mapfunctor(factor));
+  
   mpl.Materialize(Host);
+  int res = mpl.Reduce(reducefunctor());
 
-
-  int Ints[tpl->size_];
-
-  loadToHost<int>(path, size, Ints, func);
-
-  for (int i = 0; i < tpl->GetDataSize(); i++) {
-
-    EXPECT_EQ(Ints[i] * factor, mpl.data_[i]);
-  }
-
-  tpl->Materialize(None);
-
-  EXPECT_EQ(tpl->data_, nullptr);
-
-  delete tpl;
+  EXPECT_EQ(res, 55 * 3);
 
 }

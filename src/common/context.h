@@ -10,7 +10,7 @@
 namespace cuspark {
 
   template <typename BaseType>
-    class TextPipeLine;
+    class PipeLine;
 
   class Context {
     public:
@@ -44,8 +44,8 @@ namespace cuspark {
         }
 
       template <typename BaseType, typename InputMapOp>
-        TextPipeLine<BaseType> *textFile(std::string path, uint32_t size, InputMapOp f) {
-          return new TextPipeLine<BaseType>(path, size, f, this); 
+        PipeLine<BaseType> textFile(std::string path, uint32_t size, InputMapOp f) {
+          return PipeLine<BaseType>(path, size, f, this); 
         }
 
       void printDeviceInfo() {
