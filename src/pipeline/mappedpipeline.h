@@ -27,9 +27,8 @@ namespace cuspark {
         template <typename BinaryOp>
           AfterType Reduce(BinaryOp f);
 
+        // return the data in memory
         AfterType *GetData();
-
-        //AfterType GetElement(uint32_t index);
 
         Context *GetContext();
 
@@ -37,11 +36,10 @@ namespace cuspark {
 
         void Materialize(MemLevel ml);
 
+        // functor of the map operation
         UnaryOp f_;
+
         PipeLine<BaseType> *parent_;
-      
-      private:
-        typedef PipeLine<AfterType> inherited;
     };
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
@@ -56,9 +54,9 @@ namespace cuspark {
     template <typename BinaryOp>
     AfterType
     MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce(BinaryOp f) {
-      DLOG(INFO) << "Mapped Reduce from " << mlString(this->memLevel);
-      DLOG(INFO) << "data_ addr: " << inherited::data_;
-      switch (this->memLevel) {
+      DLOG(INFO) << "Mapped Reduce from " << mlString(this->memLevel_);
+      DLOG(INFO) << "data_ addr: " << PipeLine<AfterType>::data_;
+      switch (this->memLevel_) {
         case Host:
         case Cuda:
           return PipeLine<AfterType>::Reduce(f);
@@ -74,7 +72,7 @@ namespace cuspark {
   template <typename AfterType, typename BaseType, typename UnaryOp>
     AfterType * 
     MappedPipeLine<AfterType, BaseType, UnaryOp>::GetData() {
-      return inherited::GetData();
+      return PipeLine<AfterType>::GetData();
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
@@ -89,19 +87,10 @@ namespace cuspark {
       return PipeLine<AfterType>::GetDataSize();
     }
 
-
-  /*
-  template <typename AfterType, typename BaseType, typename UnaryOp>
-    AfterType 
-    MappedPipeLine<AfterType, BaseType, UnaryOp>::GetElement(uint32_t index) {
-      return PipeLine<AfterType>::GetElement(index);
-    }
-
-    */
   template <typename AfterType, typename BaseType, typename UnaryOp>
     void
     MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml) {
-      DLOG(INFO) << "Materialize from " << mlString(this->memLevel) << " to " << mlString(ml);
+      DLOG(INFO) << "Materialize from " << mlString(this->memLevel_) << " to " << mlString(ml);
       BaseType *cuda_base;
       AfterType *cuda_after;
       thrust::device_ptr<BaseType> base_ptr;
@@ -112,8 +101,8 @@ namespace cuspark {
       AfterType *data_;
       switch (ml) {
         case Host:
-          inherited::data_ = new AfterType[this->GetDataSize()];
-          switch (parent_->memLevel) {
+          PipeLine<AfterType>::data_ = new AfterType[this->GetDataSize()];
+          switch (parent_->memLevel_) {
             case Host:
               // to do: actuall need current available memory
               maxBatch = this->GetContext()->getTotalGlobalMem() / sizeof(BaseType);
@@ -143,12 +132,12 @@ namespace cuspark {
               parent_->Materialize(Host);
               this->Materialize(Host);
           }
-          this->memLevel = Host;
+          this->memLevel_ = Host;
           break;
         case Cuda:
           cudaMalloc((void**)&(data_), size_ * sizeof(AfterType));
-          inherited::data_ = data_;
-          switch (parent_->memLevel) {
+          PipeLine<AfterType>::data_ = data_;
+          switch (parent_->memLevel_) {
             case Host:
               cudaMalloc((void**)&cuda_base, size_ * sizeof(BaseType));
               cudaMemcpy(cuda_base, parent_->GetData(), size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
@@ -167,10 +156,10 @@ namespace cuspark {
               this->Materialize(Cuda);
               break;
           }
-          this->memLevel = Cuda;
+          this->memLevel_ = Cuda;
           break;
         case None:
-          this->memLevel = None;
+          this->memLevel_ = None;
           break;
         default:
           break;

@@ -30,6 +30,7 @@ namespace cuspark {
 
       PipeLine(uint32_t size, Context *context);
 
+      // Interface for calling map function
       template <typename AfterType, typename UnaryOp>
         MappedPipeLine<AfterType, BaseType, UnaryOp> Map(UnaryOp f);
 
@@ -45,26 +46,41 @@ namespace cuspark {
 
       BaseType *GetData();
 
-      BaseType GetElement(uint32_t index);
-
-      BaseType GetElement_(uint32_t index);
-
       Context *GetContext();
-
-      void MallocCudaData();
-
-      void FreeCudaData();
-
-      void ReadFile_(BaseType* mem_data);
 
       void Materialize(MemLevel ml);
 
-      BaseType* data_; //pointer to the array, raw ptr in CUDA
-      uint32_t size_; //the length of the data array
+      void ReadFile_(BaseType* mem_data);
+
+      // pointer to the data array, in cuda or in host
+      BaseType* data_;
+
+      // total length of the data array
+      uint32_t size_;
+
+      // function to map from string(input file) to the data type
       InputMapOp f_;
+
+      // Input file path
       std::string filename_;
+
+      // Cuda context
       Context *context_;
-      MemLevel memLevel;
+  
+      // Overall setting of the level of materialization
+      // (1) None to be default
+      // (2) Host so that everything is materialized in memory
+      // (3) Cuda so that everything is materialized in cuda global memory
+      MemLevel mem_level_;
+
+      // The current mem level of each of the partitions
+      MemLevel* partition_mem_level_;
+   
+      // The data pointer to each of the partitions
+      // this may be address in main memory, or the address in cuda global memory
+      BaseType** partition_data_;
+   
+      int num_partitions_;
     };
 
   template <typename BaseType>
@@ -76,7 +92,7 @@ namespace cuspark {
     f_(f),
     filename_(filename),
     context_(context),
-    memLevel(None) {
+    memLevel_(None) {
       DLOG(INFO) << "Construct PipeLine from file: " << size << " * " << sizeof(BaseType);
     }
 
@@ -84,7 +100,7 @@ namespace cuspark {
     PipeLine<BaseType>::PipeLine(uint32_t size, Context *context)
     : size_(size),
     context_(context),
-    memLevel(None) {
+    memLevel_(None) {
       DLOG(INFO) << "Construct PipeLine by size and context: " << size << " * " << sizeof(BaseType);
     }
 
@@ -116,7 +132,7 @@ namespace cuspark {
       // to do: need current available mem
       size_t maxBatch = context_->getTotalGlobalMem() / sizeof(BaseType);
 
-      switch (this->memLevel) {
+      switch (this->memLevel_) {
         case Host:
           BaseType *cuda_data;
           if (size_ > maxBatch)
@@ -165,12 +181,12 @@ namespace cuspark {
       BaseType *mem_data;
       switch (ml) {
         case Host:
-          this->memLevel = Host;
+          this->memLevel_ = Host;
           data_ = new BaseType[size_];
           ReadFile_(data_);
           return;
         case Cuda: 
-          this->memLevel = Cuda;
+          this->memLevel_ = Cuda;
           mem_data = new BaseType[size_];
           ReadFile_(mem_data);
           cudaMalloc((void**)&data_, size_ * sizeof(BaseType));
@@ -178,7 +194,7 @@ namespace cuspark {
           delete mem_data;
           return;
         case None:
-          switch (this->memLevel) {
+          switch (this->memLevel_) {
             case Host:
               delete this->data_;
               this->data_ = nullptr;
@@ -197,11 +213,11 @@ namespace cuspark {
       }
     }
 
-
   template <typename BaseType>
     uint32_t PipeLine<BaseType>::GetDataSize(){
       return this->size_;
     }
+
   template <typename BaseType>
     BaseType * PipeLine<BaseType>::GetData(){
       DLOG(INFO) << "Getting data from address: " << data_;
@@ -212,31 +228,6 @@ namespace cuspark {
     Context * PipeLine<BaseType>::GetContext() {
       DLOG(INFO) << "Get Context";
       return this->context_;
-    }
-
-  template <typename BaseType>
-    BaseType PipeLine<BaseType>::GetElement(uint32_t index){
-      return GetElement_(index);
-    }
-
-  template <typename BaseType>
-    BaseType PipeLine<BaseType>::GetElement_(uint32_t index){
-      BaseType element;
-      cudaMemcpy(&element, this->data_ + index, sizeof(BaseType), cudaMemcpyDeviceToHost);
-      return element;
-    }
-
-  template <typename BaseType>
-    void PipeLine<BaseType>::MallocCudaData(){
-      DLOG(INFO) << "malloc GPU memory for data with size :" << sizeof(BaseType) << " * " << size_;
-      cudaMalloc((void**)&data_, size_ * sizeof(BaseType));
-    }
-
-  template <typename BaseType>
-    void PipeLine<BaseType>::FreeCudaData(){
-      DLOG(INFO) << "freeing GPU memory for data with size :" << sizeof(BaseType) << " * " << size_;
-      cudaFree(data_);
-      data_ = NULL;
     }
 }
 

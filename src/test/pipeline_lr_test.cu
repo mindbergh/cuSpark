@@ -62,9 +62,12 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     return p;
   };
   //PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000, func);
-  //pl.Materialize(Host);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
+  pl.Materialize(Host);
 
+  pl.GetData();
+
+/*
   double18 w;
   
   for (int i = 0; i < 100; i++){
@@ -76,21 +79,10 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     
     double18 wdiff = mpl.Reduce(reducefunctor());
 
-    //thrust::device_ptr dptr(mpl.data_);
-    
-    //float4 *mem_data = new float4[mpl.size_];
-
-
-
-    //cudaMemcpy(mem_data, mpl.data_, mpl.size_ * sizeof(float4), cudaMemcpyDeviceToHost);
-
-    //for (int i = 0; i < mpl.size_; i++) {
-    //  DLOG(INFO) << mem_data[i].x << ", " << mem_data[i].y << ", " <<  mem_data[i].z << ", " << mem_data[i].w << std::endl;
-    //}
-  
-
     //w = make_float4(w.x+eta*wdiff.x, w.y+eta*wdiff.y, w.z+eta*wdiff.z, w.w+eta*wdiff.w);
     //DLOG(INFO) << "iteration: #"<< i << ", wdiff:" <<wdiff.x<<", "<<wdiff.y<<", "<<wdiff.z<<", "<<wdiff.w<<std::endl;
   }
+*/
+  
 }
 
