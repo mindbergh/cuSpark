@@ -35,7 +35,7 @@ namespace cuspark {
 
         uint32_t GetDataSize();
 
-        void Materialize(MemLevel ml);
+        void Materialize(MemLevel ml, bool hard_materialized = true);
 
         void Materialize_(MemLevel ml);
 
@@ -122,16 +122,18 @@ namespace cuspark {
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
-    void MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml) {
+    void MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml, bool hard_materialized) {
       uint32_t total_materialized_size = this->size_ * sizeof(BaseType);      
       switch(ml) {
         case Host: {
+          this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize **mapped** pipeline to host " << ml << ", using data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
           this->materialized_data_ = new AfterType[this->size_];
           this->Materialize_(ml);
           break;
         } case Cuda: {
+          this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize **mapped** pipeline to cuda " << ml << ", using data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
           if(this->context_->addUsage(total_materialized_size) < 0){
@@ -142,7 +144,8 @@ namespace cuspark {
           this->Materialize_(ml);
           break;
         } case None: {
-          PipeLine<AfterType>::Materialize(None);
+          this->hard_materialized_ = false;
+          PipeLine<AfterType>::Materialize(None, hard_materialized);
           break;
         }
       }
@@ -186,6 +189,7 @@ namespace cuspark {
       thrust::device_ptr<BaseType> base_ptr = thrust::device_pointer_cast(cuda_base);
       thrust::device_ptr<AfterType> after_ptr = thrust::device_pointer_cast(cuda_after);
       thrust::transform(base_ptr, base_ptr + this_partition_size, after_ptr, f_);
+      parent_->DisposePartition_(cuda_base);
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>

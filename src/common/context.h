@@ -25,7 +25,7 @@ namespace cuspark {
         cudaGetDeviceProperties(&deviceProps, 0);
 
         total_memory = this->getTotalGlobalMem();
-        usable_memory = total_memory * 0.1;
+        usable_memory = total_memory * 0.9;
       }
 
       char *getDeviceName() {

@@ -87,6 +87,13 @@ namespace cuspark {
       // Its primary functionality is to retrieve a pointer in cuda global memory
       // But it also addresses useful functionality in lazy execution
       BaseType* GetPartition_(uint32_t partition_start, uint32_t this_partition_size);
+
+      void DisposePartition_(BaseType* partition_data){
+        if(!(this->memLevel_ == Cuda)){
+          cudaFree(partition_data);
+        }
+      }
+
     };
 
   template <typename BaseType>
@@ -190,16 +197,17 @@ namespace cuspark {
 
   template <typename BaseType>
     void PipeLine<BaseType>::Materialize(MemLevel ml, bool hard_materialized) {
-      this->hard_materialized_ = hard_materialized;
       uint32_t total_materialized_size = this->size_ * sizeof(BaseType);
       switch(ml){
         case Host: {
+          this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize pipeline to host " << ml << ", using data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
           this->materialized_data_ = new BaseType[this->size_];
           ReadFile_(materialized_data_);
           break;
         } case Cuda: {
+          this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize pipeline to cuda " << ml << ", using data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
           if(this->context_->addUsage(total_materialized_size) < 0){
@@ -213,16 +221,16 @@ namespace cuspark {
           delete mem_data;
           break;
         } case None: {
+          this->hard_materialized_ = false;
           DLOG(INFO) << "Calling to freeing materialized pipeline  from " << ml << ", releasing data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
-          this->hard_materialized_ = false;
           switch (this->memLevel_){
             case Host:
               delete this->materialized_data_;
               this->materialized_data_ = nullptr;
               break;
             case Cuda:
-              cudaFree(this->materialized_data_);
+              if(hard_materialized) cudaFree(this->materialized_data_);
               this->materialized_data_ = nullptr;
               this->context_->reduceUsage(total_materialized_size);
               break;
@@ -248,10 +256,12 @@ namespace cuspark {
           if(partition_start == 0 && partition_start + this_partition_size == this->size_){
             // it fits in cuda global memory, just materialize it into cuda
             this->Materialize(Cuda, false);
+            partition_data = this->GetPartition_(partition_start, this_partition_size);
+            this->Materialize(None, false); 
           } else {
             this->Materialize(Host, false);
+            partition_data = this->GetPartition_(partition_start, this_partition_size);
           }
-          partition_data = this->GetPartition_(partition_start, this_partition_size);
         }
       }
       // If we've got to the last partition, just clean the mess we just made

@@ -61,7 +61,7 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     }
     return p;
   };
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000000, func);
   pl.Materialize(Host);
 
   double18 w;
@@ -69,9 +69,6 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
   for (int i = 0; i < 100; i++){
 
     MappedPipeLine<double18, point, mapfunctor> mpl = pl.Map<double18>(mapfunctor(w));
-    
-    EXPECT_EQ(pl.size_, pl.GetDataSize());
-    EXPECT_EQ(pl.size_, mpl.size_);
     
     double18 wdiff = mpl.Reduce(reducefunctor());
 

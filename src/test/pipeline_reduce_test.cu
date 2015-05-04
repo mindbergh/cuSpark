@@ -47,9 +47,14 @@ TEST_F(PipeLineReduceTest, Basic) {
     }
     return p;
   };
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000, func);
  
-  point res = pl.Reduce(reducefunctor());
+  pl.Materialize(Host);
+  
+  point res;
+   
+  for(int i = 0; i < 100; i++)
+    res = pl.Reduce(reducefunctor());
 
   EXPECT_EQ(res.y, 55);
 
