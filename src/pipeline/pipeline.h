@@ -248,6 +248,10 @@ namespace cuspark {
         case Host: {
           cudaMalloc((void**)&partition_data, this_partition_size * sizeof(BaseType));
           cudaMemcpy(partition_data, this->materialized_data_ + partition_start, this_partition_size * sizeof(BaseType), cudaMemcpyHostToDevice);
+          // If we've got to the last partition, just clean the mess we just made
+          if(partition_start + this_partition_size == this->size_ && this->hard_materialized_ == false){
+            this->Materialize(None);
+          }
           break;
         } case Cuda: {
           partition_data = this->materialized_data_ + partition_start;
@@ -263,10 +267,6 @@ namespace cuspark {
             partition_data = this->GetPartition_(partition_start, this_partition_size);
           }
         }
-      }
-      // If we've got to the last partition, just clean the mess we just made
-      if(partition_start + this_partition_size == this->size_ && this->hard_materialized_ == false){
-        this->Materialize(None);
       }
       return partition_data;
     }

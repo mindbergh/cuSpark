@@ -66,20 +66,19 @@ TEST_F(PipeLineMapTest, Basic) {
     return p;
   };
   PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000000, func);
+  pl.Materialize(Cuda);
 
   double18 w;
   for(int i = 0; i < 18; i++){
     w.set(i, 0);
   }
   MappedPipeLine<point, point, mapfunctor> mpl = pl.Map<point>(mapfunctor(w));
-  //mpl.Materialize(Host);
-  point res = mpl.Reduce(reducefunctor()); 
-  /*
-  for(int i = 0; i < 10; i++){
-    point res = mpl.Reduce(reducefunctor()); 
+  //point res = mpl.Reduce(reducefunctor()); 
+  point res;
+  for(int i = 0; i < 100; i++){
+    res = mpl.Reduce(reducefunctor()); 
   }
-  */
-  //EXPECT_EQ(res.y, 55);
+  EXPECT_EQ(res.y, 55);
 
 }
 
