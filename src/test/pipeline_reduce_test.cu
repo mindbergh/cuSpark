@@ -1,5 +1,4 @@
 #include <gtest/gtest.h>
-#include "pipeline/mappedpipeline.h"
 #include "pipeline/pipeline.h"
 #include "common/logging.h"
 #include "common/context.h"
@@ -49,8 +48,6 @@ TEST_F(PipeLineReduceTest, Basic) {
     return p;
   };
   PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
-  pl.Materialize(Host);
-  pl.Materialize(None);
  
   point res = pl.Reduce(reducefunctor());
 

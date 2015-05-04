@@ -24,8 +24,9 @@ namespace cuspark {
         //template <typename W>
         //MappedPipeLine<W, AfterType> Map(unaryOp f);
 
-        template <typename BinaryOp>
-          AfterType Reduce(BinaryOp f);
+        template <typename BinaryOp> AfterType Reduce(BinaryOp f);
+
+        template <typename BinaryOp> AfterType Reduce_(BinaryOp f);
 
         // return the data in memory
         AfterType *GetData();
@@ -35,6 +36,14 @@ namespace cuspark {
         uint32_t GetDataSize();
 
         void Materialize(MemLevel ml);
+
+        void Materialize_(MemLevel ml);
+
+        //this function return the max unit memory that is used in a chain
+        // used when counting the size of a partition when allocating data
+        uint32_t GetMaxUnitMemory_();
+
+        void Map_Partition_(AfterType* cuda_after, uint32_t partition_start, uint32_t this_partition_size);
 
         // functor of the map operation
         UnaryOp f_;
@@ -49,23 +58,49 @@ namespace cuspark {
     parent_(parent),
     f_(f) {}
 
-
   template <typename AfterType, typename BaseType, typename UnaryOp>
     template <typename BinaryOp>
-    AfterType
-    MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce(BinaryOp f) {
-      DLOG(INFO) << "Mapped Reduce from " << mlString(this->memLevel_);
-      DLOG(INFO) << "data_ addr: " << PipeLine<AfterType>::data_;
+    AfterType MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce_(BinaryOp f) {
+
+      AfterType result;
+      uint32_t partition_size = std::min((this->context_->getUsableMemory() 
+          / this->GetMaxUnitMemory_()), this->size_);
+      uint32_t num_partitions = (this->size_ + partition_size - 1)/partition_size;
+      DLOG(INFO) << "Reducing from mapped pipeline, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
+
+      // Allocating the space for a single partition to hold
+      AfterType* cuda_after;
+      cudaMalloc((void**)&cuda_after, partition_size * sizeof(BaseType));
+
+      // do this on each of the partitions
+      for(uint32_t i = 0; i < num_partitions; i++){
+        uint32_t partition_start = i * partition_size;
+        uint32_t partition_end = std::min(this->size_, (i+1) * partition_size);
+        uint32_t this_partition_size = partition_end - partition_start;
+        DLOG(INFO) << "Reducing, partition #" << i << ", size: "<< this_partition_size;
+        this->Map_Partition_(cuda_after, partition_start, this_partition_size);    
+        AfterType partition_result = this->Reduce_Partition_(cuda_after, this_partition_size, f);
+
+        //update the result according to which partition this is handling
+        if(i == 0){
+          result = partition_result;
+        } else {
+          result = f(result, partition_result);
+        }
+      }
+      cudaFree(cuda_after);
+      return result;
+    }
+  
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    template <typename BinaryOp>
+    AfterType MappedPipeLine<AfterType, BaseType, UnaryOp>::Reduce(BinaryOp f) {
       switch (this->memLevel_) {
         case Host:
         case Cuda:
           return PipeLine<AfterType>::Reduce(f);
         case None:
-          this->Materialize(Host);
-          return PipeLine<AfterType>::Reduce(f);
-        default:
-          DLOG(FATAL) << "memLevel type not correct";
-          exit(1);
+          return this->Reduce_(f);
       }
     }
 
@@ -82,88 +117,80 @@ namespace cuspark {
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
-    uint32_t
-    MappedPipeLine<AfterType, BaseType, UnaryOp>::GetDataSize() {
+    uint32_t MappedPipeLine<AfterType, BaseType, UnaryOp>::GetDataSize() {
       return PipeLine<AfterType>::GetDataSize();
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
     void MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml) {
-      DLOG(INFO) << "Materialize from " << mlString(this->memLevel_) << " to " << mlString(ml);
-      BaseType *cuda_base;
-      AfterType *cuda_after;
-      thrust::device_ptr<BaseType> base_ptr;
-      thrust::device_ptr<AfterType> after_ptr;
-      size_t processed = 0;
-      size_t maxBatch = 0;
-      size_t size_ = this->GetDataSize();
-      AfterType *data_;
-      switch (ml) {
-        case Host:
-          PipeLine<AfterType>::data_ = new AfterType[this->GetDataSize()];
-          switch (parent_->memLevel_) {
-            case Host:
-              // to do: actuall need current available memory
-              maxBatch = this->GetContext()->getTotalGlobalMem() / sizeof(BaseType);
-              cudaMalloc((void**)&cuda_base, size_ * sizeof(BaseType));
-              cudaMalloc((void**)&cuda_after, size_ * sizeof(AfterType));
-              base_ptr = thrust::device_pointer_cast(cuda_base);
-              after_ptr = thrust::device_pointer_cast(cuda_after);
-              while (processed < size_) {
-                size_t thisBatch = std::min(maxBatch, size_ - processed);
-                cudaMemcpy(cuda_base, parent_->GetData() + processed, thisBatch * sizeof(BaseType), cudaMemcpyHostToDevice);
-                thrust::transform(base_ptr, base_ptr + thisBatch, after_ptr, f_);
-                cudaMemcpy(this->GetData() + processed, cuda_after, thisBatch * sizeof(AfterType), cudaMemcpyDeviceToHost);
-                processed += thisBatch;
-              }
-              cudaFree(cuda_base);
-              cudaFree(cuda_after);
-              break;
-            case Cuda:
-              cudaMalloc((void**)&cuda_after, size_ * sizeof(AfterType));
-              base_ptr = thrust::device_pointer_cast(parent_->GetData());
-              after_ptr= thrust::device_pointer_cast(cuda_after);
-              thrust::transform(base_ptr, base_ptr + size_, after_ptr, f_);
-              cudaMemcpy(this->GetData(), cuda_after, size_ * sizeof(AfterType), cudaMemcpyDeviceToHost);
-              cudaFree(cuda_after);
-              break;
-            case None:
-              parent_->Materialize(Host);
-              this->Materialize(Host);
+      uint32_t total_materialized_size = this->size_ * sizeof(BaseType);      
+      switch(ml) {
+        case Host: {
+          DLOG(INFO) << "Calling to materialize **mapped** pipeline to host " << ml << ", using data "
+              << (total_materialized_size / (1024 * 1024)) << "MB";
+          this->materialized_data_ = new AfterType[this->size_];
+          this->Materialize_(ml);
+          break;
+        } case Cuda: {
+          DLOG(INFO) << "Calling to materialize **mapped** pipeline to cuda " << ml << ", using data "
+              << (total_materialized_size / (1024 * 1024)) << "MB";
+          if(this->context_->addUsage(total_materialized_size) < 0){
+            DLOG(FATAL) << "Over allocating GPU Memory, Program terminated";
+            exit(1);
           }
-          this->memLevel_ = Host;
+          cudaMalloc((void**)&(this->materialized_data_), total_materialized_size);
+          this->Materialize_(ml);
           break;
-        case Cuda:
-          cudaMalloc((void**)&(data_), size_ * sizeof(AfterType));
-          PipeLine<AfterType>::data_ = data_;
-          switch (parent_->memLevel_) {
-            case Host:
-              cudaMalloc((void**)&cuda_base, size_ * sizeof(BaseType));
-              cudaMemcpy(cuda_base, parent_->GetData(), size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
-              base_ptr = thrust::device_pointer_cast(cuda_base);
-              after_ptr = thrust::device_pointer_cast(this->GetData());
-              thrust::transform(base_ptr, base_ptr + size_, after_ptr, f_);
-              cudaFree(cuda_base);
-              break;
-            case Cuda:
-              base_ptr = thrust::device_pointer_cast(parent_->GetData());
-              after_ptr = thrust::device_pointer_cast(this->GetData());
-              thrust::transform(base_ptr, base_ptr + size_, after_ptr, f_);
-              break;
-            case None:
-              parent_->Materialize(Cuda);
-              this->Materialize(Cuda);
-              break;
-          }
-          this->memLevel_ = Cuda;
+        } case None: {
+          PipeLine<AfterType>::Materialize(None);
           break;
-        case None:
-          this->memLevel_ = None;
-          break;
-        default:
-          break;
+        }
       }
-      return;
+      this->memLevel_ = ml;
+    }
+
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    void MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize_(MemLevel ml) {
+      uint32_t partition_size = std::min((this->context_->getUsableMemory() 
+          / this->GetMaxUnitMemory_()), this->size_);
+      uint32_t num_partitions = (this->size_ + partition_size - 1)/partition_size;
+      DLOG(INFO) << "Materializing Map, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
+
+      // Allocating the space for a single partition to hold
+      AfterType* cuda_after;
+      cudaMalloc((void**)&cuda_after, partition_size * sizeof(BaseType));
+      // do this on each fo the iterations
+      for(uint32_t i = 0; i < num_partitions; i++){
+        uint32_t partition_start = i * partition_size;
+        uint32_t partition_end = std::min(this->size_, (i+1) * partition_size);
+        uint32_t this_partition_size = partition_end - partition_start;
+        DLOG(INFO) << "Mapping, partition #" << i << ", size: "<< this_partition_size;
+        this->Map_Partition_(cuda_after, partition_start, this_partition_size);
+    
+        // Materialize this chunk of data according to the MemLevel
+        switch(ml) {
+          case Host: {
+            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToHost);
+          } case Cuda: {
+            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToDevice);
+          }
+        }
+      }
+      cudaFree(cuda_after);
+    }
+
+  // Map the partiton to a cuda memory address
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    void MappedPipeLine<AfterType, BaseType, UnaryOp>::Map_Partition_(AfterType* cuda_after, uint32_t partition_start, uint32_t this_partition_size) {
+      BaseType* cuda_base = parent_->GetPartition_(partition_start, this_partition_size);
+      thrust::device_ptr<BaseType> base_ptr = thrust::device_pointer_cast(cuda_base);
+      thrust::device_ptr<AfterType> after_ptr = thrust::device_pointer_cast(cuda_after);
+      thrust::transform(base_ptr, base_ptr + this_partition_size, after_ptr, f_);
+    }
+
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    uint32_t MappedPipeLine<AfterType, BaseType, UnaryOp>::GetMaxUnitMemory_() {
+      return std::max(parent_->GetMaxUnitMemory_(), (uint32_t)(sizeof(AfterType) + sizeof(BaseType)));
     }
 }
 
