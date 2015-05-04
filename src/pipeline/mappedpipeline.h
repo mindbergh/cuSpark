@@ -88,8 +88,7 @@ namespace cuspark {
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
-    void
-    MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml) {
+    void MappedPipeLine<AfterType, BaseType, UnaryOp>::Materialize(MemLevel ml) {
       DLOG(INFO) << "Materialize from " << mlString(this->memLevel_) << " to " << mlString(ml);
       BaseType *cuda_base;
       AfterType *cuda_after;

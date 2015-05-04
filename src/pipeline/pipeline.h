@@ -40,20 +40,21 @@ namespace cuspark {
 
       // Inner handler of reduce function
       template <typename BinaryOp>
-        BaseType Reduce_(BaseType* cuda_data, int batch_size, BinaryOp f);
+        BaseType Reduce_Partition_(BaseType* cuda_data, uint32_t partition_size, BinaryOp f);
 
       uint32_t GetDataSize();
 
       BaseType *GetData();
 
       Context *GetContext();
-
+      
       void Materialize(MemLevel ml);
 
       void ReadFile_(BaseType* mem_data);
 
-      // pointer to the data array, in cuda or in host
-      BaseType* data_;
+      // this function return the max unit memory that is used in a chain
+      // used when counting the size of a partition when allocating data
+      uint32_t GetMaxUnitMemory_();
 
       // total length of the data array
       uint32_t size_;
@@ -71,16 +72,11 @@ namespace cuspark {
       // (1) None to be default
       // (2) Host so that everything is materialized in memory
       // (3) Cuda so that everything is materialized in cuda global memory
-      MemLevel mem_level_;
-
-      // The current mem level of each of the partitions
-      MemLevel* partition_mem_level_;
+      MemLevel memLevel_;
    
-      // The data pointer to each of the partitions
-      // this may be address in main memory, or the address in cuda global memory
-      BaseType** partition_data_;
-   
-      int num_partitions_;
+      // pointer to the data array, in host or in cuda
+      // It will only be set set if we materialied the data in cuda or host
+      BaseType* materialized_data_;
     };
 
   template <typename BaseType>
@@ -113,127 +109,153 @@ namespace cuspark {
 
   template <typename BaseType>
     template <typename BinaryOp>
-    BaseType PipeLine<BaseType>::Reduce_(BaseType* cuda_data, int batch_size, BinaryOp f) {
+    BaseType PipeLine<BaseType>::Reduce_Partition_(BaseType* cuda_data, uint32_t partition_size, BinaryOp f) {
       thrust::device_ptr<BaseType> dptr = thrust::device_pointer_cast(cuda_data);
       // Use the first element as the inital value
       BaseType initvalue;
       cudaMemcpy(&initvalue, cuda_data, sizeof(BaseType), cudaMemcpyDeviceToHost);
       // Execute reduce on this chunk using thrust
-      BaseType thisres = thrust::reduce(dptr + 1, dptr + batch_size, initvalue, f);
+      BaseType thisres = thrust::reduce(dptr + 1, dptr + partition_size, initvalue, f);
       return thisres;
     }
 
   template <typename BaseType>
     template <typename BinaryOp>
     BaseType PipeLine<BaseType>::Reduce(BinaryOp f) {
-      DLOG(INFO) << "Executing Reduce\n";
-      BaseType result, batch_result;
-      size_t processed = 0;
-      // to do: need current available mem
-      size_t maxBatch = context_->getTotalGlobalMem() / sizeof(BaseType);
+      BaseType result;
 
       switch (this->memLevel_) {
-        case Host:
-          BaseType *cuda_data;
-          if (size_ > maxBatch)
-            cudaMalloc((void**)&cuda_data, maxBatch * sizeof(BaseType));
-          else
-            cudaMalloc((void**)&cuda_data, size_ * sizeof(BaseType));
-          while (processed < size_) {
-            size_t thisBatch = std::min(maxBatch, size_ - processed);
-            DLOG(INFO) << "Reducing, This batch: " << thisBatch;
-            cudaMemcpy(cuda_data, this->data_ + processed, thisBatch * sizeof(BaseType), cudaMemcpyHostToDevice);
-            batch_result = this->Reduce_(cuda_data, thisBatch, f);
-            // update the result according to which batch this is handling
-            if(processed == 0)
-              result = batch_result;
-            else
-              result = f(result, batch_result);
+        case Host: {
+          uint32_t partition_size = std::min((context_->getUsableMemory() 
+              / this->GetMaxUnitMemory_()), size_);
+          uint32_t num_partitions = (size_ + partition_size - 1)/partition_size;
+          DLOG(INFO) << "Executing Reduce From Host Memory, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
 
-            processed += thisBatch;
+          BaseType *cuda_data;
+          cudaMalloc((void**)&cuda_data, partition_size * sizeof(BaseType));
+          // do this on each of the partitions
+          for(uint32_t i = 0; i < num_partitions; i++) {
+            uint32_t partition_start = i * partition_size;
+            uint32_t partition_end = std::min(size_, (i+1) * partition_size);
+            uint32_t this_partition_size = partition_end - partition_start;
+            DLOG(INFO) << "Reducing, partition #" << i << ", size: "<< this_partition_size;
+            cudaMemcpy(cuda_data, this->materialized_data_ + partition_start, this_partition_size * sizeof(BaseType), cudaMemcpyHostToDevice);
+            BaseType partition_result = this->Reduce_Partition_(cuda_data, this_partition_size, f);
+            // update the result according to which batch this is handling
+            if(i == 0){
+              result = partition_result;
+            } else {
+              result = f(result, partition_result);
+            }
           }
-          return result;
-        case Cuda:
-          this->Reduce_(this->data_, this->size_, f);
-        case None:
+          cudaFree(cuda_data);
+          break; 
+        } case Cuda: {
+          DLOG(INFO) << "Executing Reduce From Cuda Memory\n";
+          result = this->Reduce_Partition_(this->materialized_data_, this->size_, f);
+          break;
+        } case None: {
           this->Materialize(Host);
-          return this->Reduce(f);
-        default:
-          DLOG(FATAL) << "memLevel type not correct";
-          exit(1);
+          result = this->Reduce(f);
+          this->Materialize(None);
+          break;
+        }
       }
+      return result;
     }
 
   template <typename BaseType>
     void PipeLine<BaseType>::ReadFile_(BaseType* mem_data){
-      DLOG(INFO) << "Reading File: " << filename_;
+      DLOG(INFO) << "Reading File to memory: " << filename_;
       std::ifstream infile;
       infile.open(filename_);
       std::string line;
       int count = 0;
       while (std::getline(infile, line) && count < size_) {
-        data_[count++] = f_(line);
+        mem_data[count++] = f_(line);
       }
     }
 
   template <typename BaseType>
     void PipeLine<BaseType>::Materialize(MemLevel ml) {
-      BaseType *mem_data;
-      switch (ml) {
-        case Host:
-          this->memLevel_ = Host;
-          data_ = new BaseType[size_];
-          ReadFile_(data_);
-          return;
-        case Cuda: 
-          this->memLevel_ = Cuda;
-          mem_data = new BaseType[size_];
+      uint32_t total_materialized_size = this->size_ * sizeof(BaseType);
+      switch(ml){
+        case Host: {
+          DLOG(INFO) << "Calling to materialize pipeline to host " << ml << ", using data "
+              << (total_materialized_size / (1024 * 1024)) << "MB";
+          this->materialized_data_ = new BaseType[this->size_];
+          ReadFile_(materialized_data_);
+          break;
+        } case Cuda: {
+          DLOG(INFO) << "Calling to materialize pipeline to cuda " << ml << ", using data "
+              << (total_materialized_size / (1024 * 1024)) << "MB";
+          if(this->context_->addUsage(total_materialized_size) < 0){
+            DLOG(FATAL) << "Over allocating GPU Memory, Program terminated";
+            exit(1);
+          }
+          BaseType* mem_data = new BaseType[this->size_];
           ReadFile_(mem_data);
-          cudaMalloc((void**)&data_, size_ * sizeof(BaseType));
-          cudaMemcpy(data_, mem_data, size_ * sizeof(BaseType), cudaMemcpyHostToDevice);
+          cudaMalloc((void**)&materialized_data_, total_materialized_size);
+          cudaMemcpy(materialized_data_, mem_data, total_materialized_size, cudaMemcpyHostToDevice);
           delete mem_data;
-          return;
-        case None:
+          break;
+        } case None: {
           switch (this->memLevel_) {
             case Host:
-              delete this->data_;
-              this->data_ = nullptr;
+              delete this->materialized_data_;
+              this->materialized_data_ = nullptr;
               break;
             case Cuda:
-              cudaFree(this->data_);
-              this->data_ = nullptr;
-              break;
-            case None:
-              break;
-            default:
+              cudaFree(this->materialized_data_);
+              this->materialized_data_ = nullptr;
+              this->context_->reduceUsage(total_materialized_size);
               break;
           }
-        default:
-          return; 
+        }
       }
+      this->memLevel_ = ml;
     }
-
+  
   template <typename BaseType>
     uint32_t PipeLine<BaseType>::GetDataSize(){
       return this->size_;
     }
 
+  // Get the data array for use
+  // In case it interferes with the normal execution
+  // I would simply malloc a new array and copy the data out
   template <typename BaseType>
     BaseType * PipeLine<BaseType>::GetData(){
-      DLOG(INFO) << "Getting data from address: " << data_;
-      return this->data_;
+      // Initiate the array for the returned data, this should fits in memory 
+      BaseType* returned_data = new BaseType[this->size_];
+      switch (this->memLevel_) {
+        case Host:
+          memcpy(returned_data, this->materialized_data_, this->size_ * sizeof(BaseType));
+          break;
+        case None:
+          this->Materialize(Host);
+          memcpy(returned_data, this->materialized_data_, this->size_ * sizeof(BaseType));
+          this->Materialize(None);
+          break;
+        case Cuda:
+          cudaMemcpy(returned_data, this->materialized_data_, this->size_ * sizeof(BaseType), cudaMemcpyDeviceToHost);
+          break;
+        default:
+          DLOG(FATAL) << "memLevel type not correct";
+          exit(1);
+      }
+      return returned_data;
     }
 
   template <typename BaseType>
     Context * PipeLine<BaseType>::GetContext() {
-      DLOG(INFO) << "Get Context";
       return this->context_;
     }
+
+  template <typename BaseType>
+    uint32_t PipeLine<BaseType>::GetMaxUnitMemory_() {
+      return sizeof(BaseType);
+    }
 }
-
-
-
-
-
 
 #endif // CUSPARK_SRC_PIPELINE_PIPELINE_H_

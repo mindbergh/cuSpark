@@ -3,13 +3,10 @@
 #include "pipeline/pipeline.h"
 #include "common/logging.h"
 #include "common/context.h"
+#include "common/types.h"
 #include <boost/lexical_cast.hpp>
 
-
 using namespace cuspark;
-
-typedef int (*InputMapOp)(const std::string&);
-
 
 class PipeLineReduceTest : public ::testing::Test {
   protected:
@@ -20,56 +17,43 @@ class PipeLineReduceTest : public ::testing::Test {
     }
 };
 
-template <typename T, typename Func>
-void loadToHost(std::string path, uint32_t size, T* t, Func f) {
-  uint32_t count = 0;
-  std::ifstream infile;
-  infile.open(path);
-  std::string line;
+typedef Array<double, 18> double18;
 
-  while (std::getline(infile, line)) {
-    t[count++] = f(line);
-  }
-
-  EXPECT_EQ(count, size);
-  return;
+struct point{
+  double18 x;
+  double y;
 };
-
-struct mapfunctor {
-  const int factor;
-  mapfunctor(int factor) : factor(factor) {}
-  __host__ __device__
-  int operator()(int a) {
-    return a * factor;
-  }
-};
+  
+typedef point (*InputMapOp)(const std::string&);
 
 struct reducefunctor {
   __host__ __device__
-  int operator() (int a, int b) {
-    return a + b;
+  point operator() (point arg1, point arg2){
+    point p;
+    p.x = arg1.x + arg2.x;
+    p.y = arg1.y + arg2.y;
+    return p;
   }
 };
 
 TEST_F(PipeLineReduceTest, Basic) {
   DLOG(INFO) << "******************Running Reduce Test******************";
-  std::string path = "./data/testInts.txt";
-  uint32_t size = 10;
   Context context;
-  InputMapOp func = [] (const std::string& line) -> int {
-    int res = boost::lexical_cast<int>(line);
-    return res;
+  InputMapOp func = [] (const std::string& line) -> point {
+    std::stringstream iss(line);
+    point p;
+    iss >> p.y;
+    for(int i = 0; i < 18; i++){
+      iss >> p.x.data[i];
+    }
+    return p;
   };
-  PipeLine<int> pl = context.textFile<int>(path, size, func);
-  
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
   pl.Materialize(Host);
+  pl.Materialize(None);
  
-  int factor = 3;
-  MappedPipeLine<int, int, mapfunctor> mpl = pl.Map<int>(mapfunctor(factor));
-  
-  mpl.Materialize(Host);
-  int res = mpl.Reduce(reducefunctor());
+  point res = pl.Reduce(reducefunctor());
 
-  EXPECT_EQ(res, 55 * 3);
+  EXPECT_EQ(res.y, 55);
 
 }

@@ -1,11 +1,9 @@
 #ifndef CUSPARK_COMMON_CONTEXT_H
 #define CUSPARK_COMMON_CONTEXT_H
 
-
 #include "common/logging.h"
 #include <cuda.h>
 #include <cuda_runtime.h>
-
 
 namespace cuspark {
 
@@ -13,6 +11,7 @@ namespace cuspark {
     class PipeLine;
 
   class Context {
+
     public:
       Context() {
         DLOG(INFO) << "Initial cuSpark context..." << std::endl;
@@ -24,6 +23,9 @@ namespace cuspark {
           exit(1);
         }
         cudaGetDeviceProperties(&deviceProps, 0);
+
+        total_memory = this->getTotalGlobalMem();
+        usable_memory = total_memory * 0.1;
       }
 
       char *getDeviceName() {
@@ -43,6 +45,27 @@ namespace cuspark {
           return a;
         }
 
+      // Called typically when materializing data to cuda
+      int addUsage(uint32_t size){
+        usable_memory -= size;
+        DLOG(INFO) << "Adding GPU Global Memory usage by "<< (size / (1024 * 1024)) 
+            << "MB, now left: " << (usable_memory / (1024 * 1024));
+        return usable_memory;
+      }
+
+      // Called typically when materializing data to None
+      int reduceUsage(uint32_t size){
+        usable_memory += size;
+        DLOG(INFO) << "Reducing GPU Global Memory usage by "<< (size / (1024 * 1024)) 
+            << "MB, now left: " << (usable_memory / (1024 * 1024));
+        return usable_memory;
+      }
+  
+      uint32_t getUsableMemory(){
+        DLOG(INFO) << "Getting Usable GPU Memory: " << (usable_memory / (1024 * 1024));
+        return usable_memory;
+      }
+
       template <typename BaseType, typename InputMapOp>
         PipeLine<BaseType> textFile(std::string path, uint32_t size, InputMapOp f) {
           return PipeLine<BaseType>(path, size, f, this); 
@@ -58,6 +81,8 @@ namespace cuspark {
 
     private:
       cudaDeviceProp deviceProps;
+      uint32_t total_memory; 
+      uint32_t usable_memory; 
   };
 
 }
