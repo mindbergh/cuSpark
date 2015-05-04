@@ -72,7 +72,7 @@ TEST_F(PipeLineMapTest, Basic) {
     w.set(i, 0);
   }
   MappedPipeLine<point, point, mapfunctor> mpl = pl.Map<point>(mapfunctor(w));
-  mpl.Materialize(Host);
+  //mpl.Materialize(Host);
   point res = mpl.Reduce(reducefunctor()); 
   /*
   for(int i = 0; i < 10; i++){
