@@ -24,7 +24,7 @@ ifeq ($(ARCH), Darwin)
 LDFLAGS+=-L/usr/local/cuda/lib/ -lcudart
 else
 # Building on Linux
-LDFLAGS+=-L/usr/local/cuda/lib64/ -lcudart
+LDFLAGS+=-L/usr/local/cuda/lib64/ -lcudadevrt
 endif
 
 NVCC = nvcc -m64 -arch=sm_21
