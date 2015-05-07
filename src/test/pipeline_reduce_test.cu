@@ -38,6 +38,7 @@ struct reducefunctor {
 TEST_F(PipeLineReduceTest, Basic) {
   DLOG(INFO) << "******************Running Reduce Test******************";
   Context context;
+  context.printDeviceInfo();
   InputMapOp func = [] (const std::string& line) -> point {
     std::stringstream iss(line);
     point p;
@@ -47,9 +48,9 @@ TEST_F(PipeLineReduceTest, Basic) {
     }
     return p;
   };
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000, func);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000000, func);
  
-  pl.Materialize(Host);
+  pl.Materialize(Cuda);
   
   point res;
    

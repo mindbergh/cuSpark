@@ -56,6 +56,7 @@ TEST_F(PipeLineMapTest, Basic) {
   DLOG(INFO) << "******************Running Map Test******************";
   float eta = 0.01;
   Context context;
+  context.printDeviceInfo();
   InputMapOp func = [] (const std::string& line) -> point {
     std::stringstream iss(line);
     point p;

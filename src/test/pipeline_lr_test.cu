@@ -52,6 +52,7 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
   DLOG(INFO) << "******************Running Logistic Regression Test******************";
   float eta = 0.01;
   Context context;
+  context.printDeviceInfo();
   InputMapOp func = [] (const std::string& line) -> point {
     std::stringstream iss(line);
     point p;
