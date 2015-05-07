@@ -49,6 +49,8 @@ namespace cuspark {
         UnaryOp f_;
 
         PipeLine<BaseType> *parent_;
+
+        AfterType* GetPartition_(uint32_t partition_start, uint32_t this_partition_size);
     };
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
@@ -157,11 +159,12 @@ namespace cuspark {
       uint32_t partition_size = std::min((this->context_->getUsableMemory() 
           / this->GetMaxUnitMemory_()), this->size_);
       uint32_t num_partitions = (this->size_ + partition_size - 1)/partition_size;
-      DLOG(INFO) << "Materializing Map, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
+      DLOG(INFO) << "Materializing Map, with " << num_partitions 
+          << " partitions, each dealing with " << partition_size << " size of data";
 
       // Allocating the space for a single partition to hold
       AfterType* cuda_after;
-      cudaMalloc((void**)&cuda_after, partition_size * sizeof(BaseType));
+      cudaMalloc((void**)&cuda_after, partition_size * sizeof(AfterType));
       // do this on each fo the iterations
       for(uint32_t i = 0; i < num_partitions; i++){
         uint32_t partition_start = i * partition_size;
@@ -173,9 +176,11 @@ namespace cuspark {
         // Materialize this chunk of data according to the MemLevel
         switch(ml) {
           case Host: {
-            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToHost);
+            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, 
+                this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToHost);
           } case Cuda: {
-            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToDevice);
+            cudaMemcpy(this->materialized_data_ + partition_start, cuda_after, 
+                this_partition_size * sizeof(AfterType), cudaMemcpyDeviceToDevice);
           }
         }
       }
@@ -195,6 +200,22 @@ namespace cuspark {
   template <typename AfterType, typename BaseType, typename UnaryOp>
     uint32_t MappedPipeLine<AfterType, BaseType, UnaryOp>::GetMaxUnitMemory_() {
       return std::max(parent_->GetMaxUnitMemory_(), (uint32_t)(sizeof(AfterType) + sizeof(BaseType)));
+    }
+
+  template <typename AfterType, typename BaseType, typename UnaryOp>
+    AfterType* MappedPipeLine<AfterType, BaseType, UnaryOp>::GetPartition_(uint32_t partition_start, uint32_t this_partition_size){
+      //Retrieve the partition according to the memLevel 
+      switch(this->memLevel_){
+        case Host:
+        case Cuda: 
+          return PipeLine<AfterType>::GetPartition_();
+        case None: {
+          AfterType* partition_data;
+          cudaMalloc((void**)&partition_data, this_partition_size * sizeof(AfterType));
+          this->Map_Partition_(partition_data, partition_start, this_partition_size);
+          return partition_data;
+        }
+      }
     }
 }
 
