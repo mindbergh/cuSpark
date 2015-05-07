@@ -132,7 +132,7 @@ namespace cuspark {
       BaseType initvalue;
       cudaMemcpy(&initvalue, cuda_data, sizeof(BaseType), cudaMemcpyDeviceToHost);
       // Execute reduce on this chunk using thrust
-      BaseType thisres = thrust::reduce(dptr + 1, dptr + partition_size, initvalue, f);
+      BaseType thisres = thrust::reduce(dptr+1, dptr + partition_size, initvalue, f);
       return thisres;
     }
 
@@ -210,8 +210,9 @@ namespace cuspark {
           this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize pipeline to cuda " << ml << ", using data "
               << (total_materialized_size / (1024 * 1024)) << "MB";
-          if(this->context_->addUsage(total_materialized_size) < 0){
-            DLOG(FATAL) << "Over allocating GPU Memory, Program terminated";
+          uint32_t left_memory = this->context_->addUsage(total_materialized_size); 
+          if(left_memory < 0){
+            DLOG(FATAL) << "Over allocating GPU Memory, now left " << left_memory << ", Program terminated";
             exit(1);
           }
           BaseType* mem_data = new BaseType[this->size_];

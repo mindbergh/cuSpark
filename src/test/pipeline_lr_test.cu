@@ -7,11 +7,11 @@
 
 using namespace cuspark;
 
-typedef Array<double, 18> double18;
+typedef Array<float, 18> double18;
 
 struct point{
   double18 x;
-  double y;
+  float y;
 };
 
 struct mapfunctor {
@@ -62,8 +62,8 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     }
     return p;
   };
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 1000000, func);
-  pl.Materialize(Host);
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
+  pl.Materialize(Cuda);
 
   double18 w;
   

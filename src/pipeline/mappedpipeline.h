@@ -81,7 +81,9 @@ namespace cuspark {
         uint32_t this_partition_size = partition_end - partition_start;
         DLOG(INFO) << "Reducing, partition #" << i << ", size: "<< this_partition_size;
         this->Map_Partition_(cuda_after, partition_start, this_partition_size);    
+        DLOG(INFO) << "Reduce Starts, partition #" << i << ", size: "<< this_partition_size;
         AfterType partition_result = this->Reduce_Partition_(cuda_after, this_partition_size, f);
+        DLOG(INFO) << "Reduce Finished, partition #" << i << ", size: "<< this_partition_size;
 
         //update the result according to which partition this is handling
         if(i == 0){
@@ -193,8 +195,11 @@ namespace cuspark {
       BaseType* cuda_base = parent_->GetPartition_(partition_start, this_partition_size);
       thrust::device_ptr<BaseType> base_ptr = thrust::device_pointer_cast(cuda_base);
       thrust::device_ptr<AfterType> after_ptr = thrust::device_pointer_cast(cuda_after);
+      DLOG(INFO) << "Map starts, size: "<< this_partition_size;
       thrust::transform(base_ptr, base_ptr + this_partition_size, after_ptr, f_);
+      DLOG(INFO) << "Map Finished, size: "<< this_partition_size;
       parent_->DisposePartition_(cuda_base);
+      DLOG(INFO) << "Disposal Finished, size: "<< this_partition_size;
     }
 
   template <typename AfterType, typename BaseType, typename UnaryOp>
