@@ -14,7 +14,7 @@ OBJS		 	+= $(patsubst $(SRC)/%.cu,$(OBJ)/%.o,$(CUDASRCS))
 INCLUDES	+= -I./ -I$(LIB)/include -I$(SRC)
 
 CXX = g++ -m64
-CXXFLAGS = -g -std=c++11 -O2 -L$(LIB)
+CXXFLAGS = -g -std=c++11 -O3 -L$(LIB)
 LDFLAGS = -lpthread -Xlinker -rpath -Xlinker $(LIB) -L$(LIB)  -lgtest -lglog
 vpath %.cc $(SRC_DIR)
 vpath %.cu $(SRC_DIR)

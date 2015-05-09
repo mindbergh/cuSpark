@@ -15,7 +15,7 @@
 using namespace cuspark;
 
 #define K 5
-#define N 1000000
+#define N 5000000
 
 
 typedef Tuple<float, 18> point;

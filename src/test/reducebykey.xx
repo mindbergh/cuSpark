@@ -1,0 +1,133 @@
+#include <gtest/gtest.h>
+#include "common/logging.h"
+#include "common/context.h"
+#include "common/types.h"
+#include "pipeline/pipeline.h"
+#include "pipeline/mappedpipeline.h"
+#include "pipeline/pairedpipeline.h"
+
+#include <thrust/reduce.h>
+#include <thrust/pair.h>
+#include <thrust/version.h>
+#include <math_constants.h>
+#include <assert.h>
+
+using namespace cuspark;
+
+typedef Tuple<float, 18> point;
+/*
+   struct point {
+   double18 x;
+   };
+ */
+
+struct mapfunctor {
+  int N;
+  point* centroids;
+  int count;
+  mapfunctor(int n, point* c) :
+    N(n), 
+    centroids(c),
+    count(0) {}
+
+  __host__   
+    thrust::pair<int, int> operator()() { 
+      int id = count % N;
+      count ++; 
+      //DLOG(INFO) << "This is " << id;
+      thrust::pair<int, int> res(id, 1);
+      return res;
+    }
+};
+
+struct reducefunctor { 
+  __host__ __device__ 
+    int operator() (int arg1, int arg2) {
+
+      int p;
+      p = arg1 + arg2;
+      return p;
+    }
+};
+
+typedef point (*InputMapOp)(const std::string&);
+
+class ReduceByKeyTest : public ::testing::Test {
+  protected:
+    virtual void SetUp() {
+    }
+
+    virtual void TearDown() {
+    }
+};
+
+TEST_F(ReduceByKeyTest, Basic) {
+  DLOG(INFO) << "******************Running ReduceBYKey Test******************";
+
+  int major = THRUST_MAJOR_VERSION;
+  int minor = THRUST_MINOR_VERSION;
+  int subminor = THRUST_SUBMINOR_VERSION;
+
+  std::cout << "Thrust v" << major << "." << minor << "." << subminor << std::endl;
+
+
+  int N = 100;
+  int groups = 3;
+  InputMapOp func = [] (const std::string& line) -> point {
+    std::stringstream iss(line);
+    point p;
+    float tmp;
+    iss >> tmp;
+    for (int i = 0; i < 18; i++) {
+      iss >> p.data[i];
+    }
+    return p;
+  };
+
+  point ps[N];
+  int keys[N];
+  int values[N];
+  int keyed[N];
+  int valued[N];
+
+  std::ifstream infile;
+  infile.open("/tmp/mingf/SUSY.txt");
+  std::string line;
+  int count = 0;
+  while (count < N) {
+    keys[count] = 0;
+    values[count] = 0;
+    keyed[count] = 0;
+    valued[count] = 0;
+    count++;
+  }
+
+  std::cout << "Iniital values finished.\n";
+
+
+  auto f = mapfunctor(groups, ps);
+  for (int i = 0; i < N; i++) {
+    auto pair = f();
+    keys[i] = pair.first;
+    values[i] = pair.second;
+    //EXPECT_EQ(values[i][0], pair.second[0]);
+  }
+
+  std::cout << "Iniital keys finished.\n";
+
+  thrust::equal_to<int> pred;
+  thrust::pair<int*, int*> new_end = thrust::reduce_by_key(keys, keys+N, values, keyed, valued, pred, reducefunctor());
+
+  int n = new_end.first - keyed;
+  DLOG(INFO) << "num of group = " << n;
+  for (int i = 0; i < groups; i ++) {
+    DLOG(INFO) << keyed[i] << ", " << valued[i];
+  }
+
+
+  //EXPECT_EQ(res.size(), 1);
+  //auto a = res.begin();
+  //int b = a->first;
+  //EXPECT_EQ(b, 1);
+}
+

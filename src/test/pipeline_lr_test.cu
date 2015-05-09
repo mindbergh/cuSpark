@@ -7,7 +7,7 @@
 
 using namespace cuspark;
 
-typedef Array<double, 18> double18;
+typedef Tuple<double, 18> double18;
 
 struct point{
   double18 x;
@@ -76,6 +76,5 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     w = w + wdiff;
     DLOG(INFO) << "##################iteration: #"<< i ;
   }
-  
 }
 

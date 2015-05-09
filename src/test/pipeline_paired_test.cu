@@ -67,8 +67,8 @@ class PipeLinePairTest : public ::testing::Test {
 TEST_F(PipeLinePairTest, Basic) {
   DLOG(INFO) << "******************Running Paring Test******************";
 
-  int N = 5;
-
+  int K = 5;
+  int N = 5000000;
   Context context;
   //context.printDeviceInfo();
   InputMapOp func = [] (const std::string& line) -> point {
@@ -82,9 +82,9 @@ TEST_F(PipeLinePairTest, Basic) {
     return p;
   };
 
-  auto points = context.textFile<point>("/tmp/mingf/SUSY.txt", 1000000, func);
+  auto points = context.textFile<point>("/tmp/mingf/SUSY.txt", N, func);
   points.Materialize(Host);
-  point *old_cen = points.Take(N);
+  point *old_cen = points.Take(K);
   int* id = nullptr;
   int* cnt = nullptr;
 
@@ -97,7 +97,7 @@ TEST_F(PipeLinePairTest, Basic) {
     //DLOG(INFO) << "K mean iteration: " << i;
     /*
        DLOG(INFO) << "Centroids: ";
-       for (int j = 0; j < N; j++) {
+       for (int j = 0; j < K; j++) {
        DLOG(INFO) << j << ": " << centroids[j].toString();
        }
      */
@@ -120,7 +120,7 @@ TEST_F(PipeLinePairTest, Basic) {
       //DLOG(INFO) << id[j] << ":" << new_cen[j].toString();
       diff += new_cen[j].distTo(old_cen[j]);
     }
-    diff /= N;
+    diff /= K;
     DLOG(INFO) << "Diff = " << diff;
     old_cen = new_cen;
   }

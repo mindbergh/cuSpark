@@ -156,12 +156,16 @@ namespace cuspark {
     template <typename BinaryOp>
     BaseType PipeLine<BaseType>::Reduce(BinaryOp f) {
       BaseType result;
-
+      uint32_t partition_start;
+      uint32_t partition_end;
+      uint32_t this_partition_size;
+      uint32_t partition_size;
+      uint32_t num_partitions;
       switch (this->memLevel_) {
         case Host: 
-          uint32_t partition_size = std::min((context_->getUsableMemory() 
+          partition_size = std::min((context_->getUsableMemory() 
                 / this->GetMaxUnitMemory_()), size_);
-          uint32_t num_partitions = (size_ + partition_size - 1)/partition_size;
+          num_partitions = (size_ + partition_size - 1)/partition_size;
           DLOG(INFO) << "Executing Reduce From Host Memory, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
 
           // Allocate the space for a single partition to hold
@@ -170,9 +174,9 @@ namespace cuspark {
 
           // do this on each of the partitions
           for (uint32_t i = 0; i < num_partitions; i++) {
-            uint32_t partition_start = i * partition_size;
-            uint32_t partition_end = std::min(size_, (i+1) * partition_size);
-            uint32_t this_partition_size = partition_end - partition_start;
+            partition_start = i * partition_size;
+            partition_end = std::min(size_, (i+1) * partition_size);
+            this_partition_size = partition_end - partition_start;
             DLOG(INFO) << "Reducing, partition #" << i << ", size: "<< this_partition_size;
             cudaMemcpy(cuda_data, this->materialized_data_ + partition_start, this_partition_size * sizeof(BaseType), cudaMemcpyHostToDevice);
             BaseType partition_result = this->Reduce_Partition_(cuda_data, this_partition_size, f);
