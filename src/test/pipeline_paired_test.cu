@@ -82,7 +82,7 @@ TEST_F(PipeLinePairTest, Basic) {
     return p;
   };
 
-  PipeLine<point> points = context.textFile<point>("/tmp/mingf/SUSY.txt", 1000000, func);
+  auto points = context.textFile<point>("/tmp/mingf/SUSY.txt", 1000000, func);
   points.Materialize(Host);
   point *old_cen = points.Take(N);
   int* id = nullptr;
@@ -101,7 +101,7 @@ TEST_F(PipeLinePairTest, Basic) {
        DLOG(INFO) << j << ": " << centroids[j].toString();
        }
      */
-    PairedPipeLine<int, point, point, mapfunctor> assignedPairs = points.Map<int, point>(mapfunctor(old_cen));
+    auto assignedPairs = points.Map<int, point>(mapfunctor(old_cen));
 
     std::tie(id, new_cen, cnt, size) = assignedPairs.ReduceByKey(reducefunctor());
     /*

@@ -28,7 +28,7 @@ namespace cuspark {
         cudaGetDeviceProperties(&deviceProps, 0);
 
         total_memory = this->getTotalGlobalMem();
-        usable_memory = total_memory * 0.05;
+        usable_memory = total_memory * 0.01;
       }
 
       char *getDeviceName() {
@@ -86,11 +86,8 @@ namespace cuspark {
         void
         pairTransform(BaseType* start, BaseType* end, KeyType* key, ValueType* value, UnaryOp f) {
           int N = end - start;
-          DLOG(INFO) << "N = " << N;
           const int threadsPerBlock = deviceProps.maxThreadsPerBlock;
           const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
-          DLOG(INFO) << "blocks = " << blocks;
-          DLOG(INFO) << "threadsPerBlock = " << threadsPerBlock;
           global_transform<<<blocks, threadsPerBlock>>>(key, value, start, f, N);
           cudaDeviceSynchronize();
         }

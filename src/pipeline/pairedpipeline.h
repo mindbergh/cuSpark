@@ -155,14 +155,14 @@ namespace cuspark {
 
         int N = new_end.first - keyed_ptr;
         DLOG(INFO) << "Size of key group after RedcueByKey: " << N;
-        DLOG(INFO) << "Size of map before merge: " << result.size();
+        //DLOG(INFO) << "Size of map before merge: " << result.size();
         merge(cuda_key_reduced, 
             cuda_value_reduced, 
             cuda_key,
             this_partition_size,
             N, 
             f);
-        DLOG(INFO) << "Size of map after merge: " << result.size();
+        //DLOG(INFO) << "Size of map after merge: " << result.size();
       }
       cudaFree(cuda_key);
       cudaFree(cuda_value);

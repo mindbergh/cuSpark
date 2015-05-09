@@ -10,6 +10,7 @@
 #include <thrust/transform.h>
 #include "common/CycleTimer.h"
 #include "common/context.h"
+#include "common/event_timer.h"
 
 namespace cuspark {
 
@@ -200,6 +201,7 @@ namespace cuspark {
   template <typename BaseType>
     void PipeLine<BaseType>::ReadFile_(BaseType* mem_data){
       DLOG(INFO) << "Reading File to memory: " << filename_;
+      double start = CycleTimer::currentSeconds();
       std::ifstream infile;
       infile.open(filename_);
       std::string line;
@@ -207,7 +209,8 @@ namespace cuspark {
       while (std::getline(infile, line) && count < size_) {
         mem_data[count++] = f_(line);
       }
-      DLOG(INFO) << "Reading File finished.";
+      double end = CycleTimer::currentSeconds();
+      DLOG(INFO) << "Reading File finished. time took: " << (end - start) * 1000 << " ms";
     }
 
   template <typename BaseType>
@@ -258,7 +261,10 @@ namespace cuspark {
   template <typename BaseType>
     BaseType* PipeLine<BaseType>::GetPartition_(uint32_t partition_start, uint32_t this_partition_size){
       BaseType* partition_data;
+      EventTimer et;
       // Retrieve the partition according to the memLevel
+      double start = CycleTimer::currentSeconds();
+      et.start();
       switch (this->memLevel_) {
         case Host: 
           cudaMalloc((void**)&partition_data, this_partition_size * sizeof(BaseType));
@@ -282,6 +288,9 @@ namespace cuspark {
             partition_data = this->GetPartition_(partition_start, this_partition_size);
           }
       }
+      et.stop();
+      double end = CycleTimer::currentSeconds();
+      DLOG(INFO) << "GetPartion of size " << this_partition_size << ", time took " << et.elapsed() << "|" << (end-start) * 1000 << "ms.";
       return partition_data;
     }
 

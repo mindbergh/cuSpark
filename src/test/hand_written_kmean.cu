@@ -14,6 +14,10 @@
 
 using namespace cuspark;
 
+#define K 5
+#define N 1000000
+
+
 typedef Tuple<float, 18> point;
 /*
    struct point {
@@ -65,10 +69,16 @@ class HandWrittenKMeanTest : public ::testing::Test {
 
 TEST_F(HandWrittenKMeanTest, Basic) {
   DLOG(INFO) << "******************Running HandWritten KMean Test******************";
+  Context context;
+  uint32_t maxMem = context.getUsableMemory();
+  uint32_t unitMem = 2 * sizeof(point) + 2 * sizeof(int);
+  uint32_t size_ = N;
+  uint32_t n = std::min(maxMem / unitMem, size_);  // partition size
+  int num_partition = (N + n - 1) / n;
 
-  int K = 5;
-  int N = 1000000;
-  point base[N];
+  double start = CycleTimer::currentSeconds();
+
+  point base[N]; 
   InputMapOp func = [] (const std::string& line) -> point {
     std::stringstream iss(line);
     point p;
@@ -87,8 +97,10 @@ TEST_F(HandWrittenKMeanTest, Basic) {
   while (std::getline(infile, line) && count < N) {
     base[count++] = func(line);
   }
-  
-  DLOG(INFO) << "Reading finished.";
+
+  double end = CycleTimer::currentSeconds();
+
+  DLOG(INFO) << "Reading finished. time tood: " << (end - start) * 1000 << " ms";
 
   point *old_cen = (point*)malloc(K * sizeof(point));
   point *new_cen;
@@ -99,62 +111,85 @@ TEST_F(HandWrittenKMeanTest, Basic) {
   point* cuda_cen;
 
   thrust::device_ptr<point> cuda_cen_ptr = thrust::device_malloc<point>(K);
-  thrust::device_ptr<point> cuda_base_ptr = thrust::device_malloc<point>(N);
-  thrust::device_ptr<point> cuda_point_ptr = thrust::device_malloc<point>(N);
+  thrust::device_ptr<point> cuda_point_ptr = thrust::device_malloc<point>(n);
 
-  thrust::device_ptr<int> cuda_id_ptr = thrust::device_malloc<int>(N);
+  thrust::device_ptr<int> cuda_id_ptr = thrust::device_malloc<int>(n);
 
-  thrust::device_ptr<int> cuda_ided_ptr = thrust::device_malloc<int>(N);
-  thrust::device_ptr<point> cuda_reduced_ptr = thrust::device_malloc<point>(N);
+  thrust::device_ptr<int> cuda_ided_ptr = thrust::device_malloc<int>(n);
+  thrust::device_ptr<point> cuda_reduced_ptr = thrust::device_malloc<point>(n);
 
   cuda_cen = thrust::raw_pointer_cast(cuda_cen_ptr);
-  thrust::copy(base, base+N, cuda_base_ptr);
+  
   thrust::equal_to<int> pred;
+  auto reducer = reducefunctor();
 
   float diff;
 
+  std::map<int, point> cen_map;
+  std::map<int, int> cnt_map;
+
   memcpy(old_cen, base, K * sizeof(point));
   int iter = 0;
+
   for (int i = 0; i < 100; i ++) {
-    thrust::copy(cuda_base_ptr, cuda_base_ptr+N, cuda_point_ptr);
+    cen_map.clear();
+    cnt_map.clear();
 
-
-    thrust::transform(cuda_point_ptr, cuda_point_ptr+N, cuda_id_ptr, mapfunctor(old_cen));
-    thrust::sort_by_key(cuda_id_ptr, cuda_id_ptr+N, cuda_point_ptr);
-    auto new_end = thrust::reduce_by_key(cuda_id_ptr, cuda_id_ptr+N, cuda_point_ptr, cuda_ided_ptr, cuda_reduced_ptr, pred, reducefunctor());
-
-    int num_group = new_end.first - cuda_ided_ptr;
-
-    thrust::copy(cuda_ided_ptr, cuda_ided_ptr+num_group, id);
     point *new_cen = (point*)malloc(K * sizeof(point));
-    thrust::copy(cuda_reduced_ptr, cuda_reduced_ptr+num_group, new_cen);
+    for (int k = 0; k < num_partition; k++) {
+      uint32_t partition_start = k * n;
+      uint32_t myn = std::min(n, N - k * n);
+      DLOG(INFO) << "About to processe (" << partition_start << ", " << partition_start << "+" << myn << ") in " << N;
+      point* mybase = base + partition_start;
+      thrust::copy(mybase, mybase+myn, cuda_point_ptr);
+      thrust::transform(cuda_point_ptr, cuda_point_ptr+myn, cuda_id_ptr, mapfunctor(old_cen));
+      thrust::sort_by_key(cuda_id_ptr, cuda_id_ptr+myn, cuda_point_ptr);
+      auto new_end = thrust::reduce_by_key(cuda_id_ptr, cuda_id_ptr+myn, cuda_point_ptr, cuda_ided_ptr, cuda_reduced_ptr, pred, reducer);
+
+      int num_group = new_end.first - cuda_ided_ptr;
+      assert(num_group == K);
+      thrust::copy(cuda_ided_ptr, cuda_ided_ptr+num_group, id);
+      thrust::copy(cuda_reduced_ptr, cuda_reduced_ptr+num_group, new_cen);
 
 
-    for (int j = 0; j < num_group; j++) {
-      cnt[j] = thrust::count(cuda_id_ptr, cuda_id_ptr+N, id[j]);
+      for (int j = 0; j < num_group; j++) {
+        cnt[j] = thrust::count(cuda_id_ptr, cuda_id_ptr+myn, id[j]);
+        auto got_cen = cen_map.find(id[j]);
+        if (got_cen == cen_map.end()) {
+          cen_map[id[j]] = new_cen[j];
+        } else {
+          cen_map[id[j]] = reducer(got_cen->second, new_cen[j]);
+        }
+
+        auto got_cnt = cnt_map.find(id[j]);
+        if (got_cnt == cnt_map.end()) {
+          cnt_map[id[j]] = cnt[j];
+        } else {
+          cnt_map[id[j]] = got_cnt->second + cnt[j];
+        }
+      }
     }
 
     diff = 0;
-
-    //DLOG(INFO) << "The resuling size: " << num_group;
-    //DLOG(INFO) << "New Centroids: ";
-    for (int j = 0; j < num_group; j++) {
-      new_cen[j] = new_cen[j] / cnt[j];
-      //DLOG(INFO) << id[j] << ":" << new_cen[j].toString();
-      diff += new_cen[j].distTo(old_cen[j]);
+    int k = 0;
+    for (auto it = cen_map.begin(); it != cen_map.end(); ++it) {
+      new_cen[k] = it->second / cnt_map[it->first];
+      diff += new_cen[k].distTo(old_cen[k]);
+      k++;
     }
+
+
+
     diff /= K;
-    //DLOG(INFO) << "Diff = " << diff;
     free(old_cen);
     old_cen = new_cen;
-    iter++;
+    DLOG(INFO) << "Diff = " << diff;
   }
-  
+  iter++;
 
   free(id);
   free(new_cen);
   thrust::device_free(cuda_cen_ptr);
-  thrust::device_free(cuda_base_ptr);
   thrust::device_free(cuda_point_ptr);
 
   thrust::device_free(cuda_id_ptr);
