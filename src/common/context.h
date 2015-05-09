@@ -2,6 +2,7 @@
 #define CUSPARK_COMMON_CONTEXT_H
 
 #include "common/logging.h"
+#include "common/kernels.h"
 #include <cuda.h>
 #include <cuda_runtime.h>
 
@@ -9,6 +10,8 @@ namespace cuspark {
 
   template <typename BaseType>
     class PipeLine;
+
+
 
   class Context {
 
@@ -25,7 +28,7 @@ namespace cuspark {
         cudaGetDeviceProperties(&deviceProps, 0);
 
         total_memory = this->getTotalGlobalMem();
-        usable_memory = total_memory * 0.9;
+        usable_memory = total_memory * 0.05;
       }
 
       char *getDeviceName() {
@@ -49,7 +52,7 @@ namespace cuspark {
       int addUsage(uint32_t size){
         usable_memory -= size;
         DLOG(INFO) << "Adding GPU Global Memory usage by "<< (size / (1024 * 1024)) 
-            << "MB, now left: " << (usable_memory / (1024 * 1024));
+          << "MB, now left: " << (usable_memory / (1024 * 1024));
         return usable_memory;
       }
 
@@ -57,10 +60,10 @@ namespace cuspark {
       int reduceUsage(uint32_t size){
         usable_memory += size;
         DLOG(INFO) << "Reducing GPU Global Memory usage by "<< (size / (1024 * 1024)) 
-            << "MB, now left: " << (usable_memory / (1024 * 1024));
+          << "MB, now left: " << (usable_memory / (1024 * 1024));
         return usable_memory;
       }
-  
+
       uint32_t getUsableMemory(){
         DLOG(INFO) << "Getting Usable GPU Memory: " << (usable_memory / (1024 * 1024));
         return usable_memory;
@@ -79,10 +82,25 @@ namespace cuspark {
 
       }
 
+      template <typename KeyType, typename ValueType, typename BaseType, typename UnaryOp>
+        void
+        pairTransform(BaseType* start, BaseType* end, KeyType* key, ValueType* value, UnaryOp f) {
+          int N = end - start;
+          DLOG(INFO) << "N = " << N;
+          const int threadsPerBlock = deviceProps.maxThreadsPerBlock;
+          const int blocks = (N + threadsPerBlock - 1) / threadsPerBlock;
+          DLOG(INFO) << "blocks = " << blocks;
+          DLOG(INFO) << "threadsPerBlock = " << threadsPerBlock;
+          global_transform<<<blocks, threadsPerBlock>>>(key, value, start, f, N);
+          cudaDeviceSynchronize();
+        }
+
+
+
     private:
-      cudaDeviceProp deviceProps;
-      uint32_t total_memory; 
-      uint32_t usable_memory; 
+        cudaDeviceProp deviceProps;
+        uint32_t total_memory; 
+        uint32_t usable_memory; 
   };
 
 }

@@ -27,7 +27,7 @@ else
 LDFLAGS+=-L/usr/local/cuda/lib64/ -lcudadevrt
 endif
 
-NVCC = nvcc -m64 -arch=sm_21
+NVCC = nvcc -m64 -arch=sm_35
 NVCCFLAGS = -g -std=c++11 -O3 -L$(LIB) -rdc=true 
 
 define make-goal

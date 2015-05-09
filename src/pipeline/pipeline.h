@@ -16,6 +16,9 @@ namespace cuspark {
   template <typename AfterType, typename BaseType, typename UnaryOp>
     class MappedPipeLine;
 
+  template <typename KeyType, typename ValueType, typename BaseType, typename UnaryOp>
+    class PairedPipeLine;
+
   /*
    * Basic PipeLine class, which we generate from file or array
    * 
@@ -34,6 +37,9 @@ namespace cuspark {
       template <typename AfterType, typename UnaryOp>
         MappedPipeLine<AfterType, BaseType, UnaryOp> Map(UnaryOp f);
 
+      template <typename KeyType, typename ValueType, typename UnaryOp>
+        PairedPipeLine<KeyType, ValueType, BaseType, UnaryOp> Map(UnaryOp f);
+
       // Interface for calling reduce function
       template <typename BinaryOp>
         BaseType Reduce(BinaryOp f);
@@ -42,12 +48,14 @@ namespace cuspark {
       template <typename BinaryOp>
         BaseType Reduce_Partition_(BaseType* cuda_data, uint32_t partition_size, BinaryOp f);
 
+      BaseType *Take(uint32_t N);
+
       uint32_t GetDataSize();
 
       BaseType *GetData();
 
       Context *GetContext();
-      
+
       // This is a function that may be used by both the user and the inner functions
       // So there's a bool value to determine if it is from user(in that case we'll perform more cautious eviction)
       void Materialize(MemLevel ml, bool hard_materialized = true);
@@ -69,20 +77,20 @@ namespace cuspark {
 
       // Cuda context
       Context *context_;
-  
+
       // Overall setting of the level of materialization
       // (1) None to be default
       // (2) Host so that everything is materialized in memory
       // (3) Cuda so that everything is materialized in cuda global memory
       MemLevel memLevel_;
-   
+
       // pointer to the data array, in host or in cuda
       // It will only be set set if we materialied the data in cuda or host
       BaseType* materialized_data_;
-   
+
       // This is an indicator whether this data is materialized upon user request
       bool hard_materialized_ = false;
-    
+
       // This is an important inner function
       // Its primary functionality is to retrieve a pointer in cuda global memory
       // But it also addresses useful functionality in lazy execution
@@ -125,6 +133,13 @@ namespace cuspark {
     }
 
   template <typename BaseType>
+    template <typename KeyType, typename ValueType, typename UnaryOp>
+    PairedPipeLine<KeyType, ValueType, BaseType, UnaryOp> PipeLine<BaseType>::Map(UnaryOp f) {
+      PairedPipeLine<KeyType, ValueType, BaseType, UnaryOp> a(this, f);
+      return a;
+    }
+
+  template <typename BaseType>
     template <typename BinaryOp>
     BaseType PipeLine<BaseType>::Reduce_Partition_(BaseType* cuda_data, uint32_t partition_size, BinaryOp f) {
       thrust::device_ptr<BaseType> dptr = thrust::device_pointer_cast(cuda_data);
@@ -142,9 +157,9 @@ namespace cuspark {
       BaseType result;
 
       switch (this->memLevel_) {
-        case Host: {
+        case Host: 
           uint32_t partition_size = std::min((context_->getUsableMemory() 
-              / this->GetMaxUnitMemory_()), size_);
+                / this->GetMaxUnitMemory_()), size_);
           uint32_t num_partitions = (size_ + partition_size - 1)/partition_size;
           DLOG(INFO) << "Executing Reduce From Host Memory, with " << num_partitions << " partitions, each dealing with " << partition_size << " size of data";
 
@@ -153,7 +168,7 @@ namespace cuspark {
           cudaMalloc((void**)&cuda_data, partition_size * sizeof(BaseType));
 
           // do this on each of the partitions
-          for(uint32_t i = 0; i < num_partitions; i++) {
+          for (uint32_t i = 0; i < num_partitions; i++) {
             uint32_t partition_start = i * partition_size;
             uint32_t partition_end = std::min(size_, (i+1) * partition_size);
             uint32_t this_partition_size = partition_end - partition_start;
@@ -161,7 +176,7 @@ namespace cuspark {
             cudaMemcpy(cuda_data, this->materialized_data_ + partition_start, this_partition_size * sizeof(BaseType), cudaMemcpyHostToDevice);
             BaseType partition_result = this->Reduce_Partition_(cuda_data, this_partition_size, f);
             // update the result according to which batch this is handling
-            if(i == 0){
+            if (i == 0) {
               result = partition_result;
             } else {
               result = f(result, partition_result);
@@ -169,16 +184,15 @@ namespace cuspark {
           }
           cudaFree(cuda_data);
           break; 
-        } case Cuda: {
+        case Cuda: 
           DLOG(INFO) << "Executing Reduce From Cuda Memory\n";
           result = this->Reduce_Partition_(this->materialized_data_, this->size_, f);
           break;
-        } case None: {
+        case None:
           this->Materialize(Host, false);
           result = this->Reduce(f);
           this->Materialize(None);
           break;
-        }
       }
       return result;
     }
@@ -193,38 +207,40 @@ namespace cuspark {
       while (std::getline(infile, line) && count < size_) {
         mem_data[count++] = f_(line);
       }
+      DLOG(INFO) << "Reading File finished.";
     }
 
   template <typename BaseType>
     void PipeLine<BaseType>::Materialize(MemLevel ml, bool hard_materialized) {
       uint32_t total_materialized_size = this->size_ * sizeof(BaseType);
-      switch(ml){
-        case Host: {
+      BaseType* mem_data;
+      switch (ml) {
+        case Host: 
           this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize pipeline to host " << ml << ", using data "
-              << (total_materialized_size / (1024 * 1024)) << "MB";
+            << (total_materialized_size / (1024 * 1024)) << "MB";
           this->materialized_data_ = new BaseType[this->size_];
           ReadFile_(materialized_data_);
           break;
-        } case Cuda: {
+        case Cuda: 
           this->hard_materialized_ = hard_materialized;
           DLOG(INFO) << "Calling to materialize pipeline to cuda " << ml << ", using data "
-              << (total_materialized_size / (1024 * 1024)) << "MB";
+            << (total_materialized_size / (1024 * 1024)) << "MB";
           if(this->context_->addUsage(total_materialized_size) < 0){
             DLOG(FATAL) << "Over allocating GPU Memory, Program terminated";
             exit(1);
           }
-          BaseType* mem_data = new BaseType[this->size_];
+          mem_data = new BaseType[this->size_];
           ReadFile_(mem_data);
           cudaMalloc((void**)&materialized_data_, total_materialized_size);
           cudaMemcpy(materialized_data_, mem_data, total_materialized_size, cudaMemcpyHostToDevice);
           delete mem_data;
           break;
-        } case None: {
+        case None: 
           this->hard_materialized_ = false;
           DLOG(INFO) << "Calling to freeing materialized pipeline  from " << ml << ", releasing data "
-              << (total_materialized_size / (1024 * 1024)) << "MB";
-          switch (this->memLevel_){
+            << (total_materialized_size / (1024 * 1024)) << "MB";
+          switch (this->memLevel_) {
             case Host:
               delete this->materialized_data_;
               this->materialized_data_ = nullptr;
@@ -235,17 +251,16 @@ namespace cuspark {
               this->context_->reduceUsage(total_materialized_size);
               break;
           }
-        }
       }
       this->memLevel_ = ml;
     }
-  
+
   template <typename BaseType>
     BaseType* PipeLine<BaseType>::GetPartition_(uint32_t partition_start, uint32_t this_partition_size){
       BaseType* partition_data;
       // Retrieve the partition according to the memLevel
-      switch(this->memLevel_){
-        case Host: {
+      switch (this->memLevel_) {
+        case Host: 
           cudaMalloc((void**)&partition_data, this_partition_size * sizeof(BaseType));
           cudaMemcpy(partition_data, this->materialized_data_ + partition_start, this_partition_size * sizeof(BaseType), cudaMemcpyHostToDevice);
           // If we've got to the last partition, just clean the mess we just made
@@ -253,11 +268,11 @@ namespace cuspark {
             this->Materialize(None);
           }
           break;
-        } case Cuda: {
+        case Cuda: 
           partition_data = this->materialized_data_ + partition_start;
           break;
-        } case None: {
-          if(partition_start == 0 && partition_start + this_partition_size == this->size_){
+        case None: 
+          if (partition_start == 0 && partition_start + this_partition_size == this->size_) {
             // it fits in cuda global memory, just materialize it into cuda
             this->Materialize(Cuda, false);
             partition_data = this->GetPartition_(partition_start, this_partition_size);
@@ -266,7 +281,6 @@ namespace cuspark {
             this->Materialize(Host, false);
             partition_data = this->GetPartition_(partition_start, this_partition_size);
           }
-        }
       }
       return partition_data;
     }
@@ -294,6 +308,27 @@ namespace cuspark {
           break;
         case Cuda:
           cudaMemcpy(returned_data, this->materialized_data_, this->size_ * sizeof(BaseType), cudaMemcpyDeviceToHost);
+          break;
+        default:
+          DLOG(FATAL) << "memLevel type not correct";
+          exit(1);
+      }
+      return returned_data;
+    }
+  template <typename BaseType> 
+    BaseType *PipeLine<BaseType>::Take(uint32_t N) {
+      BaseType* returned_data = new BaseType[N];
+      switch (this->memLevel_) {
+        case Host:
+          memcpy(returned_data, this->materialized_data_, N * sizeof(BaseType));
+          break;
+        case None:
+          this->Materialize(Host, false);
+          memcpy(returned_data, this->materialized_data_, N * sizeof(BaseType));
+          this->Materialize(None);
+          break;
+        case Cuda:
+          cudaMemcpy(returned_data, this->materialized_data_, N * sizeof(BaseType), cudaMemcpyDeviceToHost);
           break;
         default:
           DLOG(FATAL) << "memLevel type not correct";
