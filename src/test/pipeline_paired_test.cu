@@ -68,7 +68,7 @@ TEST_F(PipeLinePairTest, Basic) {
   DLOG(INFO) << "******************Running Paring Test******************";
 
   int K = 5;
-  int N = 5000000;
+  int N = 10 * 1000 * 1000;
   Context context;
   //context.printDeviceInfo();
   InputMapOp func = [] (const std::string& line) -> point {
@@ -82,7 +82,7 @@ TEST_F(PipeLinePairTest, Basic) {
     return p;
   };
 
-  auto points = context.textFile<point>("/tmp/mingf/SUSY.txt", N, func);
+  auto points = context.textFile<point>("/tmp/mingf/1000M.txt", N, func);
   points.Materialize(Host);
   point *old_cen = points.Take(K);
   int* id = nullptr;

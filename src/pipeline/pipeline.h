@@ -173,7 +173,7 @@ namespace cuspark {
           cudaMalloc((void**)&cuda_data, partition_size * sizeof(BaseType));
 
           // do this on each of the partitions
-          for (uint32_t i = 0; i < num_partitions; i++) {
+          for (int i = 0; i < num_partitions; i++) {
             partition_start = i * partition_size;
             partition_end = std::min(size_, (i+1) * partition_size);
             this_partition_size = partition_end - partition_start;

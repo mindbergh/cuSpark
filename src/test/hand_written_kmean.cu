@@ -15,7 +15,7 @@
 using namespace cuspark;
 
 #define K 5
-#define N 5000000
+#define N (10 * 1000 * 1000)
 
 
 typedef Tuple<float, 18> point;
@@ -92,7 +92,7 @@ TEST_F(HandWrittenKMeanTest, Basic) {
 
   std::string line;
   std::ifstream infile;
-  infile.open("/tmp/mingf/SUSY.txt");
+  infile.open("/tmp/mingf/1000M.txt");
   int count = 0;
   while (std::getline(infile, line) && count < N) {
     base[count++] = func(line);

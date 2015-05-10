@@ -28,7 +28,9 @@ namespace cuspark {
         cudaGetDeviceProperties(&deviceProps, 0);
 
         total_memory = this->getTotalGlobalMem();
-        usable_memory = total_memory * 0.01;
+        usable_memory = 1 * 1024 * 1024 * 1024;
+        DLOG(INFO) << "Mem " << (this->getTotalGlobalMem() / (1024 * 1024));
+        DLOG(INFO) << "Memery limited at " << (usable_memory / (1024 * 1024));
       }
 
       char *getDeviceName() {
@@ -96,7 +98,7 @@ namespace cuspark {
 
     private:
         cudaDeviceProp deviceProps;
-        uint32_t total_memory; 
+        size_t total_memory; 
         uint32_t usable_memory; 
   };
 
