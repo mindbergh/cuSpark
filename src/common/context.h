@@ -25,7 +25,7 @@ namespace cuspark {
         cudaGetDeviceProperties(&deviceProps, 0);
 
         total_memory = this->getTotalGlobalMem();
-        usable_memory = total_memory * 0.9;
+        usable_memory = 1024 * 1024 * 1024;//total_memory * 0.8;
       }
 
       char *getDeviceName() {
@@ -47,10 +47,14 @@ namespace cuspark {
 
       // Called typically when materializing data to cuda
       int addUsage(uint32_t size){
-        usable_memory -= size;
         DLOG(INFO) << "Adding GPU Global Memory usage by "<< (size / (1024 * 1024)) 
             << "MB, now left: " << (usable_memory / (1024 * 1024));
-        return usable_memory;
+        if(size > usable_memory) 
+          return -1;
+        else {
+          usable_memory -= size;
+          return usable_memory;
+        }
       }
 
       // Called typically when materializing data to None

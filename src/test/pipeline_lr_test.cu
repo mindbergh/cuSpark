@@ -38,7 +38,15 @@ struct reducefunctor {
 };
 
 typedef point (*InputMapOp)(const std::string&);
-
+  InputMapOp func = [] (const std::string& line) -> point {
+    std::stringstream iss(line);
+    point p;
+    iss >> p.y;
+    for(int i = 0; i < 18; i++){
+      iss >> p.x.data[i];
+    }
+    return p;
+  };
 class PipeLineLogisticRegressionTest : public ::testing::Test {
   protected:
     virtual void SetUp() {
@@ -50,9 +58,9 @@ class PipeLineLogisticRegressionTest : public ::testing::Test {
 
 TEST_F(PipeLineLogisticRegressionTest, Basic) {
   DLOG(INFO) << "******************Running Logistic Regression Test******************";
-  float eta = 0.01;
   Context context;
   context.printDeviceInfo();
+  /*
   InputMapOp func = [] (const std::string& line) -> point {
     std::stringstream iss(line);
     point p;
@@ -62,15 +70,20 @@ TEST_F(PipeLineLogisticRegressionTest, Basic) {
     }
     return p;
   };
-  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 5000000, func);
-  pl.Materialize(Cuda);
+  */
+
+  PipeLine<point> pl = context.textFile<point>("/tmp/muyangya/SUSY.csv", 10000000, func);
+  pl.Materialize(Host);
 
   double18 w;
   
   for (int i = 0; i < 100; i++){
 
-    MappedPipeLine<double18, point, mapfunctor> mpl = pl.Map<double18>(mapfunctor(w));
+    //MappedPipeLine<double18, point, mapfunctor> mpl = pl.Map<double18>(mapfunctor(w));
+    //double18 wdiff = mpl.Reduce(reducefunctor());
+    //double18 wdiff = pl.Map<double18>(mapfunctor(w)).Reduce(reducefunctor());
     
+    auto mpl = pl.Map<double18>(mapfunctor(w));
     double18 wdiff = mpl.Reduce(reducefunctor());
 
     w = w + wdiff;
